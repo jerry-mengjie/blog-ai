@@ -1,0 +1,16 @@
+/* 全局基础样式重置 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+/* 页面主体背景与字体 */
+body {
+  background: #f7f8fa;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+  color: #323233;
+}
+/* 为底部 TabBar 预留空间, 避免内容被遮挡 */
+.app-page {
+  padding-bottom: 60px;
+}

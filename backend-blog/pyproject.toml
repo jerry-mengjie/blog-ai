@@ -1,0 +1,37 @@
+# 项目元数据与依赖声明, 使用 uv 进行依赖与虚拟环境管理
+[project]
+# 项目名称
+name = "backend-blog"
+# 项目版本
+version = "0.1.0"
+# 项目描述
+description = "博客系统后端 FastAPI + SQLAlchemy(async) + MySQL"
+# 要求的最低 Python 版本
+requires-python = ">=3.11"
+# 运行时依赖列表
+dependencies = [
+    "fastapi>=0.115.0",            # Web 框架
+    "uvicorn[standard]>=0.30.0",  # ASGI 服务器(含 uvloop/httptools 提升性能)
+    "sqlalchemy>=2.0.30",         # ORM, 2.0 风格 + 异步支持
+    "aiomysql>=0.2.0",            # MySQL 异步驱动
+    "pydantic>=2.7.0",            # 数据校验与序列化
+    "pydantic-settings>=2.3.0",   # 读取 .env 配置
+    "python-jose[cryptography]>=3.3.0",  # JWT 编解码
+    "bcrypt>=4.1.0",              # 密码哈希(直接使用, 避免 passlib 兼容问题)
+    "python-multipart>=0.0.9",    # 解析表单/文件上传
+]
+
+# 开发依赖分组(uv / PEP 735)
+[dependency-groups]
+dev = [
+    "ruff>=0.5.0",  # 代码风格检查与格式化
+]
+
+# 构建系统(供打包使用)
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# 指定打包包含的源码目录, 避免 hatchling 找不到包而报错
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
