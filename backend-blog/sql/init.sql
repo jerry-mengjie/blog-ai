@@ -1,13 +1,15 @@
 -- ===================================================================
--- 博客系统数据库初始化脚本 (MySQL 8.0+)
--- 数据库名: blog-ai   字符集: utf8mb4   引擎: InnoDB
+-- 博客系统数据库初始化脚本 (MySQL 9.7)
+-- 数据库名: blog_ai   字符集: utf8mb4   引擎: InnoDB
 -- 设计要点: 主键自增 BIGINT、合理索引、覆盖查询、避免大字段拖慢列表查询
 -- ===================================================================
 
 -- 创建数据库, 名称含连字符需用反引号包裹, 指定 utf8mb4 以支持 emoji 与多语言
-CREATE DATABASE IF NOT EXISTS `blog-ai` DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS blog_ai
+DEFAULT CHARACTER SET utf8mb4
+COLLATE utf8mb4_0900_ai_ci;
 -- 切换到目标数据库
-USE `blog-ai`;
+USE `blog_ai`;
 
 -- -------------------------------------------------------------------
 -- 1. 用户表 tb_user
@@ -28,7 +30,7 @@ CREATE TABLE `tb_user` (
   PRIMARY KEY (`id`),                                  -- 主键索引
   UNIQUE KEY `uk_username` (`username`),               -- 用户名唯一索引, 加速登录查询并防重
   KEY `idx_email` (`email`)                            -- 邮箱普通索引, 加速找回密码等场景
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户表';
 
 -- -------------------------------------------------------------------
 -- 2. 分类表 tb_category
@@ -42,7 +44,7 @@ CREATE TABLE `tb_category` (
   PRIMARY KEY (`id`),                                  -- 主键索引
   UNIQUE KEY `uk_name` (`name`),                       -- 分类名唯一, 防止重复分类
   KEY `idx_sort` (`sort`)                              -- 排序字段索引, 加速按 sort 排序的列表查询
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='分类表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='分类表';
 
 -- -------------------------------------------------------------------
 -- 3. 标签表 tb_tag
@@ -53,7 +55,7 @@ CREATE TABLE `tb_tag` (
   `name` VARCHAR(50) NOT NULL COMMENT '标签名称',
   PRIMARY KEY (`id`),                                  -- 主键索引
   UNIQUE KEY `uk_name` (`name`)                        -- 标签名唯一索引
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='标签表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='标签表';
 
 -- -------------------------------------------------------------------
 -- 4. 文章表 tb_article
@@ -79,7 +81,7 @@ CREATE TABLE `tb_article` (
   KEY `idx_status_top_time` (`status`, `is_top`, `create_time`),
   -- 标题前缀索引, 兼顾搜索与索引体积(全文检索可改用 FULLTEXT)
   KEY `idx_title` (`title`(64))
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文章表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='文章表';
 
 -- -------------------------------------------------------------------
 -- 5. 文章-标签 中间表 tb_article_tag (多对多)
@@ -92,7 +94,7 @@ CREATE TABLE `tb_article_tag` (
   PRIMARY KEY (`id`),                                  -- 主键索引
   UNIQUE KEY `uk_article_tag` (`article_id`, `tag_id`),-- 防止同一文章重复绑定同一标签
   KEY `idx_tag` (`tag_id`)                             -- 按标签反查文章列表
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文章标签关联表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='文章标签关联表';
 
 -- -------------------------------------------------------------------
 -- 6. 评论表 tb_comment
@@ -110,7 +112,7 @@ CREATE TABLE `tb_comment` (
   -- 复合索引: 文章评论列表常用 "文章ID过滤 + 时间倒序"
   KEY `idx_article_time` (`article_id`, `create_time`),
   KEY `idx_user` (`user_id`)                           -- 用户维度查询索引
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='评论表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='评论表';
 
 -- -------------------------------------------------------------------
 -- 7. 收藏表 tb_favorite
@@ -124,7 +126,7 @@ CREATE TABLE `tb_favorite` (
   PRIMARY KEY (`id`),                                  -- 主键索引
   UNIQUE KEY `uk_user_article` (`user_id`, `article_id`), -- 防止重复收藏, 同时加速"是否已收藏"判断
   KEY `idx_article` (`article_id`)                     -- 按文章统计收藏数
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='收藏表';
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收藏表';
 
 -- -------------------------------------------------------------------
 -- 初始化种子数据

@@ -6,8 +6,18 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 定义配置类, 字段名与 .env 中的键(忽略大小写)对应
 class Settings(BaseSettings):
-    # 数据库异步连接 URL
+    # 数据库异步连接 URL (MySQL 9.7 + aiomysql)
     DATABASE_URL: str
+    # 连接池常驻连接数
+    DB_POOL_SIZE: int = 20
+    # 连接池溢出上限
+    DB_MAX_OVERFLOW: int = 10
+    # 连接回收秒数, 略小于 MySQL wait_timeout(28800)
+    DB_POOL_RECYCLE: int = 28000
+    # 从池中获取连接的超时秒数
+    DB_POOL_TIMEOUT: int = 30
+    # 建立 TCP 连接超时秒数
+    DB_CONNECT_TIMEOUT: int = 10
     # JWT 签名密钥
     SECRET_KEY: str
     # JWT 算法

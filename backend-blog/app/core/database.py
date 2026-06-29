@@ -16,14 +16,19 @@ from sqlalchemy.orm import DeclarativeBase
 from app.core.config import settings
 
 
-# 创建异步数据库引擎, 配置连接池以优化高并发性能
+# 创建异步数据库引擎, 连接池参数与 MySQL 9.7 wait_timeout 对齐
 engine = create_async_engine(
-    settings.DATABASE_URL,        # 数据库连接 URL
-    echo=False,                   # 生产环境关闭 SQL 日志, 避免 I/O 开销
-    pool_size=20,                 # 连接池常驻连接数
-    max_overflow=10,              # 允许临时溢出的额外连接数
-    pool_recycle=3600,            # 连接回收时间(秒), 防止 MySQL 8 小时断连
-    pool_pre_ping=True,           # 取连接前 ping 一次, 自动剔除失效连接
+    settings.DATABASE_URL,
+    echo=False,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_recycle=settings.DB_POOL_RECYCLE,
+    pool_timeout=settings.DB_POOL_TIMEOUT,
+    pool_pre_ping=True,
+    connect_args={
+        "connect_timeout": settings.DB_CONNECT_TIMEOUT,
+        "charset": "utf8mb4",
+    },
 )
 
 # 创建异步会话工厂, expire_on_commit=False 避免提交后访问对象触发额外查询

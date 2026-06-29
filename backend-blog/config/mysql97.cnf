@@ -1,0 +1,62 @@
+# MySQL 9.7 服务器配置 — blog_ai 博客系统
+# 适用: 开发机 / 小型生产 (8~16 GB 内存, SSD)
+
+[mysqld]
+port                    = 3306
+bind-address            = 127.0.0.1
+default_storage_engine  = InnoDB
+character-set-server    = utf8mb4
+collation-server        = utf8mb4_0900_ai_ci
+sql_mode                = STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION
+
+# MySQL 9.7 认证策略 (已移除 mysql_native_password)
+authentication_policy   = caching_sha2_password
+
+# 连接 (后端 pool_size=20 + max_overflow=10)
+max_connections         = 150
+max_connect_errors      = 1000
+wait_timeout            = 28800
+interactive_timeout     = 28800
+thread_cache_size       = 16
+
+# InnoDB 内存 (8G 机 2G / 16G 机 4G)
+innodb_buffer_pool_size      = 2G
+innodb_buffer_pool_instances = 4
+
+innodb_redo_log_capacity = 1G
+innodb_log_buffer_size   = 64M
+
+innodb_flush_log_at_trx_commit = 2
+innodb_flush_method          = O_DIRECT
+innodb_flush_neighbors       = 0
+
+innodb_io_capacity           = 2000
+innodb_io_capacity_max       = 4000
+innodb_read_io_threads       = 4
+innodb_write_io_threads      = 4
+
+innodb_file_per_table        = 1
+innodb_page_cleaners         = 2
+
+tmp_table_size          = 64M
+max_heap_table_size     = 64M
+table_open_cache        = 1024
+table_definition_cache  = 1024
+
+sort_buffer_size        = 256K
+join_buffer_size        = 256K
+read_buffer_size        = 128K
+read_rnd_buffer_size    = 256K
+
+slow_query_log          = 1
+slow_query_log_file     = /tmp/mysql-slow.log
+long_query_time         = 1
+log_queries_not_using_indexes = 0
+
+skip-log-bin            = 1
+
+[client]
+default-character-set   = utf8mb4
+
+[mysql]
+default-character-set   = utf8mb4

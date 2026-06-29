@@ -5,7 +5,7 @@ name = "backend-blog"
 # 项目版本
 version = "0.1.0"
 # 项目描述
-description = "博客系统后端 FastAPI + SQLAlchemy(async) + MySQL"
+description = "博客系统后端 FastAPI + SQLAlchemy(async) + MySQL 9.7"
 # 要求的最低 Python 版本
 requires-python = ">=3.11"
 # 运行时依赖列表
@@ -13,7 +13,7 @@ dependencies = [
     "fastapi>=0.115.0",            # Web 框架
     "uvicorn[standard]>=0.30.0",  # ASGI 服务器(含 uvloop/httptools 提升性能)
     "sqlalchemy>=2.0.30",         # ORM, 2.0 风格 + 异步支持
-    "aiomysql>=0.2.0",            # MySQL 异步驱动
+    "aiomysql>=0.2.0",            # MySQL 9.7 异步驱动 (caching_sha2_password)
     "pydantic>=2.7.0",            # 数据校验与序列化
     "pydantic-settings>=2.3.0",   # 读取 .env 配置
     "python-jose[cryptography]>=3.3.0",  # JWT 编解码

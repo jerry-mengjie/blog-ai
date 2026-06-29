@@ -1,4 +1,4 @@
-# AI 博客系统 (blog-ai)
+# AI 博客系统 (blog_ai)
 
 一个前后端分离的全栈博客系统，包含**后端 API**、**移动端**与**管理后台**三个独立工程。
 
@@ -10,7 +10,7 @@
 
 | 模块 | 目录 | 技术选型 | 说明 |
 | --- | --- | --- | --- |
-| 后端 | `backend-blog` | FastAPI + SQLAlchemy 2.0(async) + aiomysql + MySQL 8 + JWT | uv 管理依赖，异步高性能 |
+| 后端 | `backend-blog` | FastAPI + SQLAlchemy 2.0(async) + aiomysql + MySQL 9.7 + JWT | uv 管理依赖，异步高性能 |
 | 移动端 | `frontend-app` | Vue3 + Vite + Vant 4 + Pinia + Vue Router + Axios | 面向 C 端用户 |
 | 管理后台 | `frontend-admin` | Vue3 + Vite + Element Plus + Pinia + Vue Router + Axios | 含 RBAC 权限控制 |
 
@@ -34,7 +34,7 @@
                                       │ SQLAlchemy(async) + aiomysql
                                       ▼
                           ┌────────────────────────┐
-                          │   MySQL 8 「blog-ai」   │
+                          │  MySQL 9.7 「blog_ai」  │
                           │   7 张业务表 + 索引优化  │
                           └────────────────────────┘
 ```
@@ -50,7 +50,7 @@
 mysql -uroot -pqwqwqw78 < backend-blog/sql/init.sql
 ```
 
-> 库名为 `blog-ai`（含连字符，SQL 中已用反引号处理）。默认创建管理员 `admin / admin123`。
+> 库名为 `blog_ai`（含连字符，SQL 中已用反引号处理）。默认创建管理员 `admin / admin123`。
 > 后端启动时也会通过 SQLAlchemy 自动建表（`create_all`），但**推荐用上面的 SQL 脚本**以获得完整索引与种子数据。
 
 ### 3.2 后端 backend-blog
@@ -171,7 +171,7 @@ npm run dev             # 默认 http://localhost:5174
 
 **后端层**
 - 全异步（FastAPI + async SQLAlchemy + aiomysql），高并发吞吐。
-- 连接池：`pool_size=20 / max_overflow=10 / pool_pre_ping / pool_recycle=3600`，规避 MySQL 断连。
+- 连接池：`pool_size=20 / max_overflow=10 / pool_pre_ping / pool_recycle=28000`，与 MySQL 9.7 `wait_timeout` 对齐。
 - JWT 无状态鉴权，水平扩展友好。
 
 **前端层**
@@ -184,7 +184,7 @@ npm run dev             # 默认 http://localhost:5174
 ## 9. 目录结构
 
 ```
-blog-ai/
+blog_ai/
 ├── README.md                 # 本文档
 ├── backend-blog/             # 后端
 │   ├── pyproject.toml        # uv 依赖

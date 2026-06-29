@@ -23,7 +23,7 @@
       <!-- 信息列表 -->
       <van-cell-group inset>
         <van-cell title="技术栈" value="Vue3 / Vant / FastAPI" />
-        <van-cell title="数据库" value="MySQL 8.0" />
+        <van-cell title="数据库" value="MySQL 9.7" />
         <van-cell title="联系邮箱" value="admin@blog.ai" />
       </van-cell-group>
     </div>

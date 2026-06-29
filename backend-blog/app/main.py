@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 # 创建 FastAPI 应用实例
 app = FastAPI(
     title="博客系统 API",          # 文档标题
-    description="FastAPI + MySQL 博客后端", # 文档描述
+    description="FastAPI + MySQL 9.7 博客后端", # 文档描述
     version="1.0.0",               # 版本号
     lifespan=lifespan,             # 绑定生命周期
 )
