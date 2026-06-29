@@ -178,6 +178,8 @@ async def article_detail(article_id: int, db: AsyncSession = Depends(get_db)):
     article.view_count += 1
     # 提交浏览量更新
     await db.commit()
+    # commit 后 onupdate 字段会过期, 需异步刷新避免懒加载报错
+    await db.refresh(article)
     # 加载标签名称
     tags = await _load_tags(db, article_id)
     # 构造详情对象
