@@ -67,7 +67,7 @@ const onCategoryChange = (id) => {
   // 重置完成标记
   finished.value = false
   // 触发加载
-  onLoad()
+  // onLoad()
 }
 
 // 下拉刷新处理
@@ -78,7 +78,7 @@ const onRefresh = async () => {
   finished.value = false
   // 重新加载置顶与列表
   await loadTop()
-  await onLoad()
+  // await onLoad()
   // 关闭刷新动画
   refreshing.value = false
 }
