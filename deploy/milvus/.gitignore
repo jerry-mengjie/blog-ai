@@ -1,0 +1,2 @@
+# Milvus/etcd/MinIO 的本地持久化数据目录, 不入库
+volumes/

@@ -9,6 +9,8 @@ import { showToast, showConfirmDialog } from 'vant'
 import { articleApi, commentApi, favoriteApi } from '../api'
 // 引入用户状态
 import { useUserStore } from '../store/user'
+// 引入文章底部 AI 问答组件
+import AiAsk from '../components/ai-ask.vue'
 
 // 当前路由(取 id)
 const route = useRoute()
@@ -112,6 +114,9 @@ onMounted(async () => {
       <!-- 正文内容(纯文本展示, 如需富文本可用 v-html) -->
       <div class="article-body">{{ article.content }}</div>
     </div>
+
+    <!-- AI 问答区: 基于当前文章/系列内容的 RAG 问答 -->
+    <ai-ask v-if="article" :article-id="Number(articleId)" />
 
     <!-- 评论区 -->
     <div class="comments">

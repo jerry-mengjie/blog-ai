@@ -27,6 +27,36 @@ class Settings(BaseSettings):
     # 允许跨域的来源, 字符串形式(逗号分隔), 读取后再切分
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174"
 
+    # ---------- AI 问答 (RAG) ----------
+    # OpenAI 兼容接口的 API Key(阿里云百炼/OpenAI 等), 为空则 AI 功能返回 503
+    AI_API_KEY: str = ""
+    # OpenAI 兼容接口基础地址, 默认阿里云百炼(同时提供对话与向量模型)
+    AI_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    # 对话模型名称
+    AI_CHAT_MODEL: str = "qwen-plus"
+    # 向量模型名称
+    AI_EMBED_MODEL: str = "text-embedding-v4"
+    # 向量维度, 须与向量模型输出一致; 修改后集合会自动按新维度重建
+    AI_EMBED_DIM: int = 1024
+    # 单 IP 每分钟提问上限, 轻量防刷
+    AI_RATE_LIMIT: int = 10
+
+    # ---------- Milvus 向量库 ----------
+    # Milvus gRPC 地址(standalone 部署默认 19530 端口)
+    MILVUS_URI: str = "http://127.0.0.1:19530"
+    # 集合名称
+    MILVUS_COLLECTION: str = "blog_article_chunks"
+
+    # ---------- RAG 检索参数 ----------
+    # 单个文本块的目标字符数
+    RAG_CHUNK_SIZE: int = 500
+    # 相邻块的重叠字符数, 避免语义在边界被切断
+    RAG_CHUNK_OVERLAP: int = 80
+    # 检索返回的片段数量
+    RAG_TOP_K: int = 6
+    # 相似度下限, 过滤无关片段减少提示词噪音
+    RAG_SCORE_THRESHOLD: float = 0.3
+
     # 计算属性: 将逗号分隔的来源字符串转为列表, 供 CORS 中间件使用
     @property
     def cors_origins_list(self) -> list[str]:

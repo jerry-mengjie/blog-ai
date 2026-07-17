@@ -17,7 +17,11 @@ from app.core.database import Base, engine
 # 确保所有模型被导入以注册到 Base.metadata
 from app import models  # noqa: F401
 # 导入各业务路由
-from app.api import article, category, comment, favorite, tag, user
+from app.api import ai, article, category, comment, favorite, tag, user
+# 导入 AI 开关判断
+from app.ai.llm import ai_enabled
+# 导入 Milvus 集合初始化与连接释放
+from app.ai.vector_store import close_milvus, ensure_collection
 
 
 # 应用生命周期: 启动时可选自动建表, 关闭时释放引擎连接池
@@ -27,8 +31,14 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         # 依据模型元数据建表
         await conn.run_sync(Base.metadata.create_all)
+    # 启用 AI 时初始化 Milvus 集合(HNSW 向量索引 + 标量倒排索引)
+    if ai_enabled():
+        # 幂等操作, 已存在且维度一致时直接复用
+        await ensure_collection()
     # yield 之前为启动逻辑, 之后为关闭逻辑
     yield
+    # 关闭阶段: 释放 Milvus 客户端连接
+    await close_milvus()
     # 关闭阶段: 释放数据库连接池
     await engine.dispose()
 
@@ -85,3 +95,4 @@ app.include_router(category.router)   # 分类模块
 app.include_router(tag.router)        # 标签模块
 app.include_router(comment.router)    # 评论模块
 app.include_router(favorite.router)   # 收藏模块
+app.include_router(ai.router)         # AI 问答模块(RAG)

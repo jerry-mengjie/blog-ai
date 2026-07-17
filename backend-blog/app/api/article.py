@@ -1,7 +1,7 @@
 """文章模块路由: 列表/详情/发布/编辑/删除/置顶/搜索 (7 个接口)。"""
 
-# 导入路由与依赖工具
-from fastapi import APIRouter, Depends, HTTPException, Query
+# 导入路由与依赖工具(BackgroundTasks 用于响应后异步同步向量索引)
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 # 导入查询构造器与函数
 from sqlalchemy import delete, func, select
 # 导入异步会话类型
@@ -13,6 +13,8 @@ from app.core.database import get_db
 from app.core.response import Result, ok
 # 导入当前用户依赖
 from app.api.deps import get_current_user
+# 导入向量索引同步任务(AI 问答的 RAG 数据源)
+from app.ai.indexer import index_article, remove_article_index
 # 导入模型
 from app.models.article import Article
 from app.models.tag import ArticleTag, Tag
@@ -194,6 +196,7 @@ async def article_detail(article_id: int, db: AsyncSession = Depends(get_db)):
 @router.post("/add", response_model=Result, summary="发布文章")
 async def add_article(
     body: ArticleCreateReq,
+    background: BackgroundTasks,
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -219,6 +222,8 @@ async def add_article(
     await db.commit()
     # 刷新对象
     await db.refresh(article)
+    # 响应返回后异步构建向量索引, 不阻塞发布接口
+    background.add_task(index_article, article.id)
     # 返回新文章 ID
     return ok({"id": article.id})
 
@@ -228,6 +233,7 @@ async def add_article(
 async def update_article(
     article_id: int,
     body: ArticleUpdateReq,
+    background: BackgroundTasks,
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -269,6 +275,8 @@ async def update_article(
             db.add(ArticleTag(article_id=article_id, tag_id=tag_id))
     # 提交事务
     await db.commit()
+    # 响应返回后异步重建向量索引(内容/分类/状态变化都会同步)
+    background.add_task(index_article, article_id)
     # 返回成功
     return ok(message="更新成功")
 
@@ -277,6 +285,7 @@ async def update_article(
 @router.delete("/del/{article_id}", response_model=Result, summary="删除文章")
 async def delete_article(
     article_id: int,
+    background: BackgroundTasks,
     current: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
@@ -298,5 +307,7 @@ async def delete_article(
     await db.execute(delete(ArticleTag).where(ArticleTag.article_id == article_id))
     # 提交事务
     await db.commit()
+    # 响应返回后异步删除该文章的向量索引
+    background.add_task(remove_article_index, article_id)
     # 返回成功
     return ok(message="删除成功")

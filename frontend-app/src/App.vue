@@ -23,9 +23,10 @@ const onTabChange = (name) => router.push(name)
 
 <template>
   <!-- 路由出口, 使用 keep-alive 缓存列表页提升体验 -->
+  <!-- :key 绑定完整路径, 保证文章详情间跳转(如 AI 引用来源)时组件重新加载 -->
   <router-view v-slot="{ Component }">
     <keep-alive include="index">
-      <component :is="Component" />
+      <component :is="Component" :key="route.fullPath" />
     </keep-alive>
   </router-view>
 

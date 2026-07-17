@@ -19,6 +19,8 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",  # JWT 编解码
     "bcrypt>=4.1.0",              # 密码哈希(直接使用, 避免 passlib 兼容问题)
     "python-multipart>=0.0.9",    # 解析表单/文件上传
+    "openai>=1.40.0",             # OpenAI 兼容客户端(对话 + 向量化, 支持百炼/DeepSeek 等)
+    "pymilvus>=2.6.0,<3.0.0",     # Milvus 官方客户端(含 AsyncMilvusClient), 与 2.6 服务端版本配套
 ]
 
 # 开发依赖分组(uv / PEP 735)
