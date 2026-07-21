@@ -1,88 +1,60 @@
-"""LLM 客户端模块: 基于 OpenAI 兼容协议提供文本向量化与流式对话能力。"""
+"""模型客户端模块: 基于 LangChain 提供对话模型与向量模型的全局单例。
 
-# 导入异步生成器类型注解
-from typing import AsyncGenerator
+经典方案: langchain-openai 的 ChatOpenAI / OpenAIEmbeddings,
+通过 OpenAI 兼容协议对接阿里云百炼(也可换 DeepSeek 等兼容服务)。
+"""
 
-# 导入 OpenAI 官方异步客户端(兼容百炼/DeepSeek 等 OpenAI 协议服务)
-from openai import AsyncOpenAI
+# 导入 LangChain 的 OpenAI 兼容对话模型与向量模型
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 # 导入全局配置
 from app.core.config import settings
 
-# 模块级客户端单例, 懒加载以复用底层 HTTP 连接池
-_client: AsyncOpenAI | None = None
+# 模块级对话模型单例, 复用底层 HTTP 连接池
+_chat_model: ChatOpenAI | None = None
+# 模块级向量模型单例
+_embeddings: OpenAIEmbeddings | None = None
 
-# 百炼 embedding 接口单次请求的最大文本条数
-_EMBED_BATCH_SIZE = 10
 
-
-# 判断 AI 功能是否可用(未配置 API Key 时前端展示降级提示)
+# 判断 AI 功能是否可用(未配置 API Key 时前端隐藏问答入口)
 def ai_enabled() -> bool:
     # 仅当配置了 API Key 才启用
     return bool(settings.AI_API_KEY)
 
 
-# 获取全局唯一的异步客户端
-def get_client() -> AsyncOpenAI:
+# 获取全局唯一的对话模型(LCEL 链的生成节点)
+def get_chat_model() -> ChatOpenAI:
     # 声明使用模块级变量
-    global _client
+    global _chat_model
     # 首次调用时创建实例
-    if _client is None:
-        # 使用配置中的 Key 与兼容接口地址初始化
-        _client = AsyncOpenAI(
-            api_key=settings.AI_API_KEY,
-            base_url=settings.AI_BASE_URL,
+    if _chat_model is None:
+        # 按配置初始化, 低温度保证回答贴近原文
+        _chat_model = ChatOpenAI(
+            model=settings.AI_CHAT_MODEL,      # 对话模型名称
+            api_key=settings.AI_API_KEY,       # API Key
+            base_url=settings.AI_BASE_URL,     # OpenAI 兼容接口地址
+            temperature=0.3,                   # 低随机性, 减少编造
+            timeout=60,                        # 单次请求超时秒数
+            max_retries=2,                     # 网络抖动自动重试
         )
     # 返回单例
-    return _client
+    return _chat_model
 
 
-# 批量文本向量化: 输入文本列表, 返回等长的向量列表
-async def embed_texts(texts: list[str]) -> list[list[float]]:
-    # 获取客户端
-    client = get_client()
-    # 结果向量列表
-    vectors: list[list[float]] = []
-    # 按接口上限分批请求, 避免单次超限
-    for i in range(0, len(texts), _EMBED_BATCH_SIZE):
-        # 取出当前批次
-        batch = texts[i : i + _EMBED_BATCH_SIZE]
-        # 调用向量化接口, 指定输出维度与集合配置一致
-        resp = await client.embeddings.create(
-            model=settings.AI_EMBED_MODEL,
-            input=batch,
-            dimensions=settings.AI_EMBED_DIM,
+# 获取全局唯一的向量模型(交给 langchain-milvus 内部做文本向量化)
+def get_embeddings() -> OpenAIEmbeddings:
+    # 声明使用模块级变量
+    global _embeddings
+    # 首次调用时创建实例
+    if _embeddings is None:
+        # 按配置初始化, 参数适配百炼兼容接口
+        _embeddings = OpenAIEmbeddings(
+            model=settings.AI_EMBED_MODEL,     # 向量模型名称
+            api_key=settings.AI_API_KEY,       # API Key
+            base_url=settings.AI_BASE_URL,     # OpenAI 兼容接口地址
+            dimensions=settings.AI_EMBED_DIM,  # 输出维度, 与 Milvus 集合对齐
+            chunk_size=10,                     # 单批条数, 适配百炼 embedding 批量上限
+            check_embedding_ctx_length=False,  # 关闭 tiktoken 预分词, 兼容非 OpenAI 官方端点
         )
-        # 按 index 排序保证与输入顺序一致
-        ordered = sorted(resp.data, key=lambda d: d.index)
-        # 追加本批向量
-        vectors.extend(d.embedding for d in ordered)
-    # 返回全部向量
-    return vectors
-
-
-# 单条文本向量化的便捷封装(用于用户提问)
-async def embed_text(text: str) -> list[float]:
-    # 复用批量接口并取首个结果
-    return (await embed_texts([text]))[0]
-
-
-# 流式对话: 输入消息列表, 逐段产出模型生成的文本增量
-async def chat_stream(messages: list[dict]) -> AsyncGenerator[str, None]:
-    # 获取客户端
-    client = get_client()
-    # 发起流式对话请求
-    stream = await client.chat.completions.create(
-        model=settings.AI_CHAT_MODEL,
-        messages=messages,
-        stream=True,
-        temperature=0.3,
-    )
-    # 逐块读取流式响应
-    async for chunk in stream:
-        # 取出增量内容(可能为空块)
-        delta = chunk.choices[0].delta.content if chunk.choices else None
-        # 仅产出非空文本
-        if delta:
-            # 交给上层拼装 SSE
-            yield delta
+    # 返回单例
+    return _embeddings

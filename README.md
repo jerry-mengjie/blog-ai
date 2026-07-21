@@ -11,7 +11,7 @@
 | 模块 | 目录 | 技术选型 | 说明 |
 | --- | --- | --- | --- |
 | 后端 | `backend-blog` | FastAPI + SQLAlchemy 2.0(async) + aiomysql + MySQL 9.7 + JWT | uv 管理依赖，异步高性能 |
-| AI 问答 | `backend-blog/app/ai` | Milvus 2.6 + OpenAI 兼容 API(百炼) + RAG + SSE | 文章底部智能问答，详见 [docs/AI.md](docs/AI.md) |
+| AI 问答 | `backend-blog/app/ai` | LangChain(LCEL) + Milvus 2.6 + OpenAI 兼容 API(百炼) + RAG + SSE | 文章底部智能问答，详见 [docs/AI.md](docs/AI.md) |
 | 移动端 | `frontend-app` | Vue3 + Vite + Vant 4 + Pinia + Vue Router + Axios | 面向 C 端用户 |
 | 管理后台 | `frontend-admin` | Vue3 + Vite + Element Plus + Pinia + Vue Router + Axios | 含 RBAC 权限控制 |
 
@@ -31,9 +31,9 @@
                           │     backend-blog       │
                           │  FastAPI (async)       │
                           │  JWT 鉴权 + RBAC       │
-                          │  RAG 问答 (SSE 流式)    │
+                          │  LangChain RAG (SSE)   │
                           └─────┬─────────┬────────┘
-              SQLAlchemy(async) │         │ 向量检索(gRPC) / LLM(OpenAI 兼容)
+              SQLAlchemy(async) │         │ LangChain: Milvus 检索 / LCEL 流式问答
                                 ▼         ▼
                   ┌──────────────────┐  ┌──────────────────────┐
                   │ MySQL 9.7        │  │ Milvus 向量库         │
@@ -197,7 +197,8 @@ npm run dev             # 默认 http://localhost:5174
 - 移动端首页 `keep-alive` 缓存 + 分页加载。
 
 **AI / 向量层**（详见 [docs/AI.md](docs/AI.md)）
-- Milvus 全异步客户端(gRPC) + HNSW 调优 + 标量倒排索引过滤 + range search 引擎侧过滤低分结果。
+- LangChain 全链路原生异步 + 模型/存储/LCEL 链模块级单例复用。
+- Milvus HNSW 调优 + 标量倒排索引过滤 + range search 引擎侧过滤低分结果。
 - 向量索引通过 `BackgroundTasks` 响应后异步同步，发文接口零阻塞。
 - 问答接口只查必要列不加载正文大字段；单 IP 滑动窗口限流防刷。
 
@@ -220,7 +221,7 @@ blog_ai/
 │       ├── models/           # SQLAlchemy 模型
 │       ├── schemas/          # Pydantic 模型
 │       ├── api/              # 路由 + 依赖(鉴权/RBAC)
-│       └── ai/               # RAG: LLM 客户端/分块/向量库/索引同步/检索问答
+│       └── ai/               # LangChain RAG: 模型单例/分块/向量库/索引同步/LCEL 问答链
 ├── frontend-app/             # 移动端 (Vue3 + Vant)
 │   └── src/{api,components,store,router,views}
 └── frontend-admin/           # 管理后台 (Vue3 + Element Plus)

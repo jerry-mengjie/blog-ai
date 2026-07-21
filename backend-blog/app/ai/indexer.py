@@ -16,9 +16,9 @@ from app.core.database import AsyncSessionLocal
 from app.models.article import Article
 # 导入分块工具
 from app.ai.chunker import split_text
-# 导入向量化能力与开关
-from app.ai.llm import ai_enabled, embed_texts
-# 导入向量库操作
+# 导入 AI 功能开关
+from app.ai.llm import ai_enabled
+# 导入向量库操作(写入时由 LangChain 内部完成向量化)
 from app.ai.vector_store import delete_article_chunks, upsert_article_chunks
 
 # 模块日志器
@@ -47,15 +47,12 @@ async def index_article(article_id: int) -> None:
             return
         # 将 "标题 + 正文" 作为索引文本, 标题携带主题信息提升召回
         chunks = split_text(f"{article.title}\n\n{article.content}")
-        # 批量向量化全部分块
-        vectors = await embed_texts(chunks) if chunks else []
-        # 覆盖写入向量库
+        # 覆盖写入向量库(内部自动完成批量向量化)
         await upsert_article_chunks(
             article_id=article.id,
             category_id=article.category_id,
             title=article.title,
             chunks=chunks,
-            vectors=vectors,
         )
         # 记录成功日志
         logger.info("文章 %s 向量索引完成, 共 %s 块", article_id, len(chunks))

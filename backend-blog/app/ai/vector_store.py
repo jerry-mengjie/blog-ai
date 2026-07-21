@@ -1,47 +1,73 @@
-"""Milvus 向量库模块: 集合管理、分块写入与带过滤的相似度检索。
+"""Milvus 向量库模块: pymilvus 负责集合 DDL, LangChain Milvus 负责读写检索。
+
+分工(经典组合):
+- pymilvus MilvusClient: 启动期建集合, 精确控制 Schema/HNSW/标量倒排索引
+- langchain-milvus Milvus: 运行期文档写入(内部自动向量化)与相似度检索
 
 性能优化要点:
-1. AsyncMilvusClient: 运行期读写全异步(gRPC), 与 FastAPI 事件循环无缝配合
-2. HNSW 图索引: M=16/efConstruction=128 平衡构建成本与召回率, 检索 ef=64
-3. 标量倒排索引(INVERTED): article_id/category_id 过滤走索引而非全表暴力过滤
-4. range search: 以相似度下限(radius)在引擎侧过滤低分结果, 减少无效返回
+1. HNSW 图索引: M=16/efConstruction=128 平衡构建成本与召回率, 检索 ef=64
+2. 标量倒排索引(INVERTED): article_id/category_id 过滤走索引而非全表暴力过滤
+3. range search: 以相似度下限(radius)在引擎侧过滤低分结果, 减少无效返回
+4. 向量存储单例: 复用 Milvus 连接与 embedding 客户端
 """
 
 # 导入 uuid 用于生成确定性的主键
 import uuid
 
-# 导入 Milvus 客户端: 异步客户端负责运行期读写, 同步客户端仅用于启动期建集合
-from pymilvus import AsyncMilvusClient, DataType, MilvusClient
+# 导入 LangChain 文档对象(向量库读写的标准载体)
+from langchain_core.documents import Document
+# 导入 LangChain Milvus 向量存储集成
+from langchain_milvus import Milvus
+# 导入 pymilvus: 同步客户端做 DDL, connections 用于释放连接
+from pymilvus import DataType, MilvusClient, connections
 
+# 导入向量模型单例
+from app.ai.llm import get_embeddings
 # 导入全局配置
 from app.core.config import settings
 
-# 模块级异步客户端单例, 复用 gRPC 通道
-_client: AsyncMilvusClient | None = None
+# 模块级向量存储单例, 复用连接与 embedding 客户端
+_store: Milvus | None = None
 
 
-# 获取全局唯一的 Milvus 异步客户端
-def get_milvus() -> AsyncMilvusClient:
+# 获取全局唯一的 LangChain Milvus 向量存储
+def get_vector_store() -> Milvus:
     # 声明使用模块级变量
-    global _client
+    global _store
     # 首次调用时创建实例
-    if _client is None:
-        # 连接 standalone 的 gRPC 端口
-        _client = AsyncMilvusClient(uri=settings.MILVUS_URI)
+    if _store is None:
+        # 连接既有集合(由 ensure_collection 预建), 字段名与 Schema 一一对应
+        _store = Milvus(
+            embedding_function=get_embeddings(),          # 向量化交给 LangChain 内部完成
+            collection_name=settings.MILVUS_COLLECTION,   # 集合名称
+            connection_args={"uri": settings.MILVUS_URI}, # gRPC 连接地址
+            primary_field="id",                           # 主键字段名
+            text_field="text",                            # 原文字段名
+            vector_field="vector",                        # 向量字段名
+            auto_id=False,                                # 主键由业务生成(确定性 ID)
+            search_params={
+                "metric_type": "COSINE",                  # 与建索引时一致
+                "params": {
+                    "ef": 64,                             # 检索候选队列, 高于 TopK 数倍保证召回
+                    "radius": settings.RAG_SCORE_THRESHOLD,  # 相似度下限, 引擎侧过滤低分结果
+                },
+            },
+            drop_old=False,                               # 复用既有集合, 不重建
+        )
     # 返回单例
-    return _client
+    return _store
 
 
-# 应用关闭时释放客户端连接
-async def close_milvus() -> None:
+# 应用关闭时释放 Milvus 连接
+async def close_vector_store() -> None:
     # 声明使用模块级变量
-    global _client
-    # 已创建则关闭
-    if _client is not None:
-        # 关闭底层 gRPC 通道
-        await _client.close()
+    global _store
+    # 已创建则断开其连接别名
+    if _store is not None:
+        # langchain-milvus 为实例维护独立连接别名, 按别名断开
+        connections.disconnect(_store.alias)
         # 置空便于重建
-        _client = None
+        _store = None
 
 
 # 内部工具: 构建集合 Schema(显式字段, 关闭动态字段保证结构可控)
@@ -125,58 +151,56 @@ def _point_id(article_id: int, chunk_index: int) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"article:{article_id}:chunk:{chunk_index}"))
 
 
-# 写入(或覆盖)一篇文章的全部分块向量
+# 写入(或覆盖)一篇文章的全部分块(向量化由 LangChain 内部完成)
 async def upsert_article_chunks(
     article_id: int,
     category_id: int,
     title: str,
     chunks: list[str],
-    vectors: list[list[float]],
 ) -> None:
-    # 获取客户端
-    client = get_milvus()
+    # 获取向量存储
+    store = get_vector_store()
     # 先删除该文章的旧分块, 防止正文变短后残留过期块
     await delete_article_chunks(article_id)
     # 无新分块(空文章)则到此结束
     if not chunks:
         # 仅做清理
         return
-    # 构造行数据: 主键 + 向量 + 标量字段
-    rows = [
-        {
-            "id": _point_id(article_id, idx),   # 确定性主键, 幂等覆盖
-            "vector": vector,                    # 分块向量
-            "article_id": article_id,           # 文章 ID(过滤索引字段)
-            "category_id": category_id,         # 分类 ID(过滤索引字段)
-            "title": title,                     # 标题, 用于提示词中标注来源
-            "chunk_index": idx,                 # 块序号, 用于按原文顺序排序
-            "text": chunk,                      # 分块原文
-        }
-        for idx, (chunk, vector) in enumerate(zip(chunks, vectors))
+    # 将分块包装为 LangChain 文档: 原文 + 元数据(与集合标量字段一一对应)
+    docs = [
+        Document(
+            page_content=chunk,                # 分块原文(写入 text 字段并向量化)
+            metadata={
+                "article_id": article_id,      # 文章 ID(过滤索引字段)
+                "category_id": category_id,    # 分类 ID(过滤索引字段)
+                "title": title,                # 标题, 用于提示词中标注来源
+                "chunk_index": idx,            # 块序号, 用于按原文顺序排序
+            },
+        )
+        for idx, chunk in enumerate(chunks)
     ]
-    # 批量 upsert, 主键相同即覆盖(Milvus 内部转为删旧插新)
-    await client.upsert(collection_name=settings.MILVUS_COLLECTION, data=rows)
+    # 确定性主键列表, 与文档一一对应
+    ids = [_point_id(article_id, idx) for idx in range(len(chunks))]
+    # 批量写入: 内部先调 embedding 再插入 Milvus
+    await store.aadd_documents(docs, ids=ids)
 
 
 # 删除一篇文章的全部分块(文章删除或重建索引前调用)
 async def delete_article_chunks(article_id: int) -> None:
-    # 获取客户端
-    client = get_milvus()
+    # 获取向量存储
+    store = get_vector_store()
     # 按 article_id 表达式过滤删除, 命中倒排索引
-    await client.delete(
-        collection_name=settings.MILVUS_COLLECTION,
-        filter=f"article_id == {article_id}",
-    )
+    await store.adelete(expr=f"article_id == {article_id}")
 
 
 # 相似度检索: 在指定范围(当前文章 / 当前分类)内查询与问题最相关的分块
 async def search_chunks(
-    query_vector: list[float],
+    question: str,
     article_id: int | None = None,
     category_id: int | None = None,
 ) -> list[dict]:
-    # 获取客户端
-    client = get_milvus()
+    # 获取向量存储
+    store = get_vector_store()
     # 组装标量过滤表达式(数值来自数据库主键, 无注入风险)
     conditions: list[str] = []
     # 限定当前文章
@@ -187,29 +211,20 @@ async def search_chunks(
     if category_id is not None:
         # 追加分类过滤
         conditions.append(f"category_id == {category_id}")
-    # 执行向量检索: 标量过滤 + TopK + range search(相似度下限)
-    result = await client.search(
-        collection_name=settings.MILVUS_COLLECTION,
-        data=[query_vector],
-        filter=" and ".join(conditions),
-        limit=settings.RAG_TOP_K,
-        output_fields=["article_id", "title", "chunk_index", "text"],
-        search_params={
-            "metric_type": "COSINE",  # 与建索引时一致
-            "params": {
-                "ef": 64,             # 检索时候选队列, 高于 TopK 数倍以保证召回
-                "radius": settings.RAG_SCORE_THRESHOLD,  # 相似度下限, 引擎侧过滤低分结果
-            },
-        },
+    # 执行检索: 问题向量化 + 标量过滤 + TopK + range search 均在存储内部完成
+    results = await store.asimilarity_search_with_score(
+        query=question,
+        k=settings.RAG_TOP_K,
+        expr=" and ".join(conditions) or None,
     )
-    # 将命中点整理为简单字典列表返回(单条查询取首个结果集)
+    # 将命中文档整理为简单字典列表返回
     return [
         {
-            "article_id": hit["entity"]["article_id"],   # 来源文章 ID
-            "title": hit["entity"]["title"],             # 来源标题
-            "chunk_index": hit["entity"]["chunk_index"], # 块序号
-            "text": hit["entity"]["text"],               # 分块原文
-            "score": hit["distance"],                    # 余弦相似度得分
+            "article_id": doc.metadata["article_id"],   # 来源文章 ID
+            "title": doc.metadata["title"],             # 来源标题
+            "chunk_index": doc.metadata["chunk_index"], # 块序号
+            "text": doc.page_content,                   # 分块原文
+            "score": score,                             # 余弦相似度得分
         }
-        for hit in result[0]
+        for doc, score in results
     ]

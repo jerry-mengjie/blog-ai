@@ -19,8 +19,11 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",  # JWT 编解码
     "bcrypt>=4.1.0",              # 密码哈希(直接使用, 避免 passlib 兼容问题)
     "python-multipart>=0.0.9",    # 解析表单/文件上传
-    "openai>=1.40.0",             # OpenAI 兼容客户端(对话 + 向量化, 支持百炼/DeepSeek 等)
-    "pymilvus>=2.6.0,<3.0.0",     # Milvus 官方客户端(含 AsyncMilvusClient), 与 2.6 服务端版本配套
+    # Milvus 官方客户端(集合 DDL 用); 2.6.10+ 重构了连接管理, 与 langchain-milvus 0.3.3 不兼容, 故锁定
+    "pymilvus>=2.6.0,<2.6.10",
+    "langchain-openai>=1.3.5",    # LangChain OpenAI 集成: ChatOpenAI + OpenAIEmbeddings(兼容百炼)
+    "langchain-milvus>=0.3.3",    # LangChain Milvus 向量存储集成
+    "langchain-text-splitters>=1.1.2",  # LangChain 文本分块(RecursiveCharacterTextSplitter)
 ]
 
 # 开发依赖分组(uv / PEP 735)
