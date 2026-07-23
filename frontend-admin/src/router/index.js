@@ -32,6 +32,13 @@ const routes = [
         name: 'category-tag',
         component: () => import('../views/admin-category-tag.vue'),
         meta: { title: '分类标签', icon: 'CollectionTag', permission: PERMISSIONS.CATEGORY_VIEW }
+      },
+      // 用户管理(含兴趣标签), 仅管理员
+      {
+        path: 'user',
+        name: 'user',
+        component: () => import('../views/admin-user.vue'),
+        meta: { title: '用户管理', icon: 'User', permission: PERMISSIONS.USER_VIEW }
       }
     ]
   },

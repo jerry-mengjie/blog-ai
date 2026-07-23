@@ -10,7 +10,10 @@ export const PERMISSIONS = {
   ARTICLE_DELETE: 'article:delete',
   // 分类标签管理
   CATEGORY_VIEW: 'category:view',
-  CATEGORY_EDIT: 'category:edit'
+  CATEGORY_EDIT: 'category:edit',
+  // 用户管理(含兴趣标签)
+  USER_VIEW: 'user:view',
+  USER_EDIT: 'user:edit'
 }
 
 // 角色 -> 权限码列表

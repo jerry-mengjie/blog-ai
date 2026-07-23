@@ -6,8 +6,8 @@ from app.models.user import User
 from app.models.article import Article
 # 导出分类模型
 from app.models.category import Category
-# 导出标签与文章标签关联模型
-from app.models.tag import Tag, ArticleTag
+# 导出标签、文章标签与用户兴趣标签关联模型
+from app.models.tag import Tag, ArticleTag, UserTag
 # 导出评论模型
 from app.models.comment import Comment
 # 导出收藏模型
@@ -20,6 +20,7 @@ __all__ = [
     "Category",
     "Tag",
     "ArticleTag",
+    "UserTag",
     "Comment",
     "Favorite",
 ]

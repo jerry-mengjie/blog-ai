@@ -12,6 +12,7 @@
 | --- | --- | --- | --- |
 | 后端 | `backend-blog` | FastAPI + SQLAlchemy 2.0(async) + aiomysql + MySQL 9.7 + JWT | uv 管理依赖，异步高性能 |
 | AI 问答 | `backend-blog/app/ai` | LangChain(LCEL) + Milvus 2.6 + OpenAI 兼容 API(百炼) + RAG + SSE | 文章底部智能问答，详见 [docs/AI.md](docs/AI.md) |
+| 用户管理 | `backend-blog` + `frontend-admin` | 管理端用户 / 兴趣标签(复用文章标签) | 详见 [docs/USER_ADMIN.md](docs/USER_ADMIN.md) |
 | 移动端 | `frontend-app` | Vue3 + Vite + Vant 4 + Pinia + Vue Router + Axios | 面向 C 端用户 |
 | 管理后台 | `frontend-admin` | Vue3 + Vite + Element Plus + Pinia + Vue Router + Axios | 含 RBAC 权限控制 |
 
@@ -38,7 +39,7 @@
                   ┌──────────────────┐  ┌──────────────────────┐
                   │ MySQL 9.7        │  │ Milvus 向量库         │
                   │ 「blog_ai」       │  │ 文章分块向量 + 过滤索引 │
-                  │ 7 张表 + 索引优化 │  └──────────────────────┘
+                  │ 8 张表 + 索引优化 │  └──────────────────────┘
                   └──────────────────┘
 ```
 
@@ -97,23 +98,26 @@ npm run dev             # 默认 http://localhost:5174
 
 ---
 
-## 4. 数据库设计（7 张表）
+## 4. 数据库设计（8 张表）
 
 命名规范：表名 `tb_` 前缀。详见 [`backend-blog/sql/init.sql`](backend-blog/sql/init.sql)。
 
 | 表名 | 说明 | 关键索引 |
 | --- | --- | --- |
-| `tb_user` | 用户表 | 唯一索引 `username`，普通索引 `email` |
+| `tb_user` | 用户表 | 唯一索引 `username`，普通索引 `email`，复合索引 `(status, create_time)` |
 | `tb_article` | 文章表 | 复合索引 `(status, is_top, create_time)`、`user_id`、`category_id`、标题前缀索引 |
 | `tb_category` | 分类表 | 唯一 `name`、索引 `sort` |
 | `tb_tag` | 标签表 | 唯一 `name` |
 | `tb_article_tag` | 文章标签中间表 | 唯一 `(article_id, tag_id)`、索引 `tag_id` |
+| `tb_user_tag` | 用户兴趣标签中间表（复用 `tb_tag`） | 唯一 `(user_id, tag_id)`、索引 `tag_id` |
 | `tb_comment` | 评论表 | 复合索引 `(article_id, create_time)`、索引 `user_id` |
 | `tb_favorite` | 收藏表 | 唯一 `(user_id, article_id)`、索引 `article_id` |
 
+> 已有库增量：[`backend-blog/sql/migrate_user_tag.sql`](backend-blog/sql/migrate_user_tag.sql)。用户管理说明见 [docs/USER_ADMIN.md](docs/USER_ADMIN.md)。
+
 ---
 
-## 5. 接口清单（6 模块 / 24 个）
+## 5. 接口清单
 
 | 模块 | 方法 | 路径 | 说明 | 鉴权 |
 | --- | --- | --- | --- | --- |
@@ -122,6 +126,10 @@ npm run dev             # 默认 http://localhost:5174
 | 用户 | GET | `/api/user/info` | 个人信息 | 是 |
 | 用户 | PUT | `/api/user/info` | 修改资料 | 是 |
 | 用户 | POST | `/api/user/logout` | 退出登录 | 是 |
+| 管理端用户 | GET | `/api/admin/user/list` | 用户分页列表 | 管理员 |
+| 管理端用户 | GET | `/api/admin/user/detail/{id}` | 用户详情(含兴趣标签) | 管理员 |
+| 管理端用户 | PUT | `/api/admin/user/{id}` | 更新资料/状态/管理员 | 管理员 |
+| 管理端用户 | PUT | `/api/admin/user/{id}/tags` | 全量设置兴趣标签 | 管理员 |
 | 文章 | GET | `/api/article/list` | 分页列表 | 否 |
 | 文章 | GET | `/api/article/detail/{id}` | 详情 | 否 |
 | 文章 | POST | `/api/article/add` | 发布 | 是 |
@@ -161,10 +169,11 @@ npm run dev             # 默认 http://localhost:5174
 - `personal.vue` 个人中心：登录/注册 + 资料修改 + 我的收藏
 - `about.vue` 关于本站
 
-### 管理后台（3 页）
+### 管理后台（4 页）
 - `admin-login.vue` 登录（仅管理员可进入）
 - `admin-article.vue` 文章管理（增 / 改 / 删 / 搜索 / 分页）
 - `admin-category-tag.vue` 分类标签管理
+- `admin-user.vue` 用户管理（资料 / 状态 / 兴趣标签）
 
 ---
 
@@ -210,6 +219,7 @@ npm run dev             # 默认 http://localhost:5174
 blog_ai/
 ├── README.md                 # 本文档
 ├── docs/AI.md                # AI 问答功能文档(RAG 架构/接口/性能优化)
+├── docs/USER_ADMIN.md        # 管理端用户管理与兴趣标签文档
 ├── deploy/milvus/            # Milvus standalone 官方 Docker Compose 编排
 ├── backend-blog/             # 后端
 │   ├── pyproject.toml        # uv 依赖

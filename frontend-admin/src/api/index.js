@@ -42,3 +42,15 @@ export const tagApi = {
   // 新增
   add: (data) => request.post('/api/tag/add', data)
 }
+
+// 管理端用户接口(含兴趣标签)
+export const adminUserApi = {
+  // 分页列表(支持 keyword / status)
+  list: (params) => request.get('/api/admin/user/list', { params }),
+  // 详情
+  detail: (id) => request.get(`/api/admin/user/detail/${id}`),
+  // 更新资料(昵称/邮箱/头像/状态/管理员)
+  update: (id, data) => request.put(`/api/admin/user/${id}`, data),
+  // 全量设置兴趣标签(tag_ids 复用文章标签)
+  setTags: (id, data) => request.put(`/api/admin/user/${id}/tags`, data)
+}

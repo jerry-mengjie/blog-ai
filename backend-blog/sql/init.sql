@@ -29,7 +29,9 @@ CREATE TABLE `tb_user` (
   `is_admin` TINYINT NOT NULL DEFAULT 0 COMMENT '是否管理员: 1是 0否',
   PRIMARY KEY (`id`),                                  -- 主键索引
   UNIQUE KEY `uk_username` (`username`),               -- 用户名唯一索引, 加速登录查询并防重
-  KEY `idx_email` (`email`)                            -- 邮箱普通索引, 加速找回密码等场景
+  KEY `idx_email` (`email`),                           -- 邮箱普通索引, 加速找回密码等场景
+  -- 复合索引: 管理端列表常用「状态过滤 + 创建时间倒序」, 命中索引避免 filesort
+  KEY `idx_status_create` (`status`, `create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户表';
 
 -- -------------------------------------------------------------------
@@ -127,6 +129,20 @@ CREATE TABLE `tb_favorite` (
   UNIQUE KEY `uk_user_article` (`user_id`, `article_id`), -- 防止重复收藏, 同时加速"是否已收藏"判断
   KEY `idx_article` (`article_id`)                     -- 按文章统计收藏数
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='收藏表';
+
+-- -------------------------------------------------------------------
+-- 8. 用户-兴趣标签 中间表 tb_user_tag (多对多, 复用 tb_tag 词典)
+-- -------------------------------------------------------------------
+DROP TABLE IF EXISTS `tb_user_tag`;
+CREATE TABLE `tb_user_tag` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
+  `tag_id` BIGINT UNSIGNED NOT NULL COMMENT '标签ID(引用 tb_tag)',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '绑定时间',
+  PRIMARY KEY (`id`),                                  -- 主键索引
+  UNIQUE KEY `uk_user_tag` (`user_id`, `tag_id`),     -- 防止同一用户重复绑定同一标签, 同时加速「用户是否已绑某标签」
+  KEY `idx_tag` (`tag_id`)                             -- 按标签反查感兴趣的用户
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户兴趣标签关联表';
 
 -- -------------------------------------------------------------------
 -- 初始化种子数据

@@ -17,7 +17,7 @@ from app.core.database import Base, engine
 # 确保所有模型被导入以注册到 Base.metadata
 from app import models  # noqa: F401
 # 导入各业务路由
-from app.api import ai, article, category, comment, favorite, tag, user
+from app.api import admin_user, ai, article, category, comment, favorite, tag, user
 # 导入 AI 开关判断
 from app.ai.llm import ai_enabled
 # 导入 Milvus 集合初始化与连接释放
@@ -90,6 +90,7 @@ async def health():
 
 # 注册全部业务路由
 app.include_router(user.router)       # 用户模块
+app.include_router(admin_user.router) # 管理端-用户(含兴趣标签)
 app.include_router(article.router)    # 文章模块
 app.include_router(category.router)   # 分类模块
 app.include_router(tag.router)        # 标签模块

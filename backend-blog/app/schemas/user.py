@@ -63,3 +63,64 @@ class LoginOut(BaseModel):
     token: str
     # 用户信息
     user: UserOut
+
+
+# ---------- 管理端用户相关 schema ----------
+
+
+# 标签简要信息(兴趣标签展示用)
+class TagBrief(BaseModel):
+    # 标签 ID
+    id: int
+    # 标签名称
+    name: str
+
+
+# 管理端用户详情响应(含状态与兴趣标签, 不含密码)
+class AdminUserOut(BaseModel):
+    # 用户 ID
+    id: int
+    # 用户名
+    username: str
+    # 昵称
+    nickname: str
+    # 头像
+    avatar: str
+    # 邮箱
+    email: str
+    # 状态: 1 正常 0 禁用
+    status: int
+    # 是否管理员
+    is_admin: int
+    # 创建时间
+    create_time: datetime
+    # 兴趣标签列表(复用文章标签)
+    interest_tags: list[TagBrief] = Field(default_factory=list)
+
+
+# 管理端用户分页响应
+class AdminUserPageOut(BaseModel):
+    # 总条数
+    total: int
+    # 当前页用户列表
+    list: list[AdminUserOut]
+
+
+# 管理端更新用户资料请求(字段均可选)
+class AdminUpdateUserReq(BaseModel):
+    # 昵称
+    nickname: str | None = Field(default=None, max_length=50)
+    # 邮箱
+    email: str | None = Field(default=None, max_length=100)
+    # 头像
+    avatar: str | None = Field(default=None, max_length=255)
+    # 状态: 1 正常 0 禁用
+    status: int | None = Field(default=None, ge=0, le=1)
+    # 是否管理员: 1 是 0 否
+    is_admin: int | None = Field(default=None, ge=0, le=1)
+
+
+# 管理端设置用户兴趣标签请求(全量替换)
+class AdminSetUserTagsReq(BaseModel):
+    # 标签 ID 列表(须为 tb_tag 中已存在的 ID)
+    tag_ids: list[int] = Field(default_factory=list)
