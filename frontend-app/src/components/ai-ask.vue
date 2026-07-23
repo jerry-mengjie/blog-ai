@@ -45,9 +45,11 @@ const ask = (text) => {
   question.value = ''
   loading.value = true
   // 追加用户消息与 AI 占位消息
+  // 必须取数组中的响应式引用再改字段, 否则改原始对象不会触发视图更新,
+  // 界面会等 loading 结束才一次性刷出全文
   messages.value.push({ role: 'user', text: q })
-  const aiMsg = { role: 'ai', text: '', sources: [] }
-  messages.value.push(aiMsg)
+  messages.value.push({ role: 'ai', text: '', sources: [] })
+  const aiMsg = messages.value[messages.value.length - 1]
 
   abortStream = askAi(
     { article_id: props.articleId, question: q, scope: scope.value },
