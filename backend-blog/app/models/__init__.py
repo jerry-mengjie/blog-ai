@@ -12,6 +12,8 @@ from app.models.tag import Tag, ArticleTag, UserTag
 from app.models.comment import Comment
 # 导出收藏模型
 from app.models.favorite import Favorite
+# 导出用户文章浏览统计模型
+from app.models.browse import UserBrowse
 
 # 显式声明对外可导出的符号
 __all__ = [
@@ -23,4 +25,5 @@ __all__ = [
     "UserTag",
     "Comment",
     "Favorite",
+    "UserBrowse",
 ]

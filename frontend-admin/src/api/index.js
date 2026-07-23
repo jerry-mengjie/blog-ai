@@ -54,3 +54,9 @@ export const adminUserApi = {
   // 全量设置兴趣标签(tag_ids 复用文章标签)
   setTags: (id, data) => request.put(`/api/admin/user/${id}/tags`, data)
 }
+
+// 管理端浏览统计
+export const adminBrowseApi = {
+  // 分页列表(keyword / user_id / article_id)
+  list: (params) => request.get('/api/admin/browse/list', { params })
+}

@@ -7,7 +7,7 @@ import { useRouter } from 'vue-router'
 import { showToast } from 'vant'
 // 引入用户状态与接口
 import { useUserStore } from '../store/user'
-import { userApi, favoriteApi } from '../api'
+import { userApi, favoriteApi, browseApi } from '../api'
 
 // 路由实例
 const router = useRouter()
@@ -22,6 +22,8 @@ const form = ref({ username: '', password: '', nickname: '' })
 const profile = ref({ nickname: '', email: '', avatar: '' })
 // 我的收藏列表
 const favorites = ref([])
+// 我的足迹列表
+const browses = ref([])
 // 资料编辑弹窗显隐
 const showEdit = ref(false)
 
@@ -38,9 +40,8 @@ const onSubmit = async () => {
   }
   // 登录模式
   await userStore.login(form.value)
-  // 登录成功后加载收藏
-  await loadFavorites()
-  // 提示
+  // 登录成功后加载收藏与足迹
+  await Promise.all([loadFavorites(), loadBrowses()])
   showToast('登录成功')
 }
 
@@ -60,8 +61,22 @@ const loadInfo = async () => {
 
 // 加载我的收藏
 const loadFavorites = async () => {
-  // 请求收藏列表
   favorites.value = await favoriteApi.list()
+}
+
+// 加载我的足迹(最近浏览)
+const loadBrowses = async () => {
+  const res = await browseApi.list({ page: 1, page_size: 20 })
+  browses.value = res.list || []
+}
+
+// 格式化时长展示
+const formatDuration = (sec) => {
+  const s = Number(sec) || 0
+  if (s < 60) return `${s}秒`
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  return r ? `${m}分${r}秒` : `${m}分钟`
 }
 
 // 保存资料修改
@@ -79,9 +94,8 @@ const saveProfile = async () => {
 const onLogout = async () => {
   // 调用退出
   await userStore.logout()
-  // 清空收藏
   favorites.value = []
-  // 提示
+  browses.value = []
   showToast('已退出')
 }
 
@@ -90,10 +104,9 @@ const goDetail = (id) => router.push(`/article/${id}`)
 
 // 挂载时若已登录则加载数据
 onMounted(async () => {
-  // 已登录则加载信息与收藏
   if (userStore.isLogin) {
     await loadInfo()
-    await loadFavorites()
+    await Promise.all([loadFavorites(), loadBrowses()])
   }
 })
 </script>
@@ -142,6 +155,18 @@ onMounted(async () => {
         <!-- 编辑按钮 -->
         <van-button size="small" plain type="primary" @click="showEdit = true">编辑</van-button>
       </div>
+
+      <!-- 我的足迹 -->
+      <div class="section-title">我的足迹</div>
+      <van-card
+        v-for="b in browses"
+        :key="b.id"
+        :title="b.title"
+        :desc="`浏览 ${b.view_count} 次 · 共 ${formatDuration(b.total_duration)}`"
+        :thumb="b.cover || 'https://picsum.photos/200/200'"
+        @click="goDetail(b.article_id)"
+      />
+      <van-empty v-if="!browses.length" description="还没有浏览记录" />
 
       <!-- 我的收藏标题 -->
       <div class="section-title">我的收藏</div>

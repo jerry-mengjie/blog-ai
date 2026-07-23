@@ -13,7 +13,9 @@ export const PERMISSIONS = {
   CATEGORY_EDIT: 'category:edit',
   // 用户管理(含兴趣标签)
   USER_VIEW: 'user:view',
-  USER_EDIT: 'user:edit'
+  USER_EDIT: 'user:edit',
+  // 浏览统计
+  BROWSE_VIEW: 'browse:view'
 }
 
 // 角色 -> 权限码列表

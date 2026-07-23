@@ -39,6 +39,13 @@ const routes = [
         name: 'user',
         component: () => import('../views/admin-user.vue'),
         meta: { title: '用户管理', icon: 'User', permission: PERMISSIONS.USER_VIEW }
+      },
+      // 浏览统计(用户×文章累计)
+      {
+        path: 'browse',
+        name: 'browse',
+        component: () => import('../views/admin-browse.vue'),
+        meta: { title: '浏览统计', icon: 'View', permission: PERMISSIONS.BROWSE_VIEW }
       }
     ]
   },

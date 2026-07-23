@@ -30,23 +30,29 @@ request.interceptors.response.use(
     const res = response.data
     // code 为 0 表示成功, 直接返回 data
     if (res.code === 0) return res.data
-    // 非 0 弹出错误提示
-    showToast(res.message || '请求失败')
+    // 静默请求不弹 Toast(如离开页上报浏览)
+    if (!response.config?.silent) {
+      showToast(res.message || '请求失败')
+    }
     // 抛出错误中断后续 then
     return Promise.reject(res)
   },
   (error) => {
+    // 是否静默
+    const silent = error.config?.silent
     // 读取 HTTP 状态码
     const status = error.response?.status
     // 401 表示未登录或令牌失效
     if (status === 401) {
       // 清除本地令牌
       localStorage.removeItem('token')
-      // 跳转到个人中心(内含登录)
-      router.push('/personal')
+      // 非静默才跳转登录页
+      if (!silent) router.push('/personal')
     }
-    // 统一错误提示
-    showToast(error.response?.data?.message || '网络异常')
+    // 非静默才提示
+    if (!silent) {
+      showToast(error.response?.data?.message || '网络异常')
+    }
     // 抛出错误
     return Promise.reject(error)
   }

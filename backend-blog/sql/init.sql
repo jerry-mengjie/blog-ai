@@ -145,6 +145,29 @@ CREATE TABLE `tb_user_tag` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户兴趣标签关联表';
 
 -- -------------------------------------------------------------------
+-- 9. 用户-文章浏览统计表 tb_user_browse (累计非流水)
+-- -------------------------------------------------------------------
+DROP TABLE IF EXISTS `tb_user_browse`;
+CREATE TABLE `tb_user_browse` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+  `user_id` BIGINT UNSIGNED NOT NULL COMMENT '用户ID',
+  `article_id` BIGINT UNSIGNED NOT NULL COMMENT '文章ID',
+  `view_count` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '浏览总次数',
+  `total_duration` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '总时长(秒)',
+  `best_duration` INT UNSIGNED NOT NULL DEFAULT 0 COMMENT '单次最长浏览时长(秒)',
+  `best_browse_time` DATETIME NULL DEFAULT NULL COMMENT '最好浏览时间(最长那次发生时刻)',
+  `last_browse_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '最近浏览时间',
+  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次记录时间',
+  PRIMARY KEY (`id`),
+  -- 同一用户同一文章一行, 支撑 ON DUPLICATE KEY UPDATE 原子累计
+  UNIQUE KEY `uk_user_browse` (`user_id`, `article_id`),
+  -- 我的足迹: 用户过滤 + 最近浏览倒序
+  KEY `idx_user_last` (`user_id`, `last_browse_time`),
+  -- 按文章反查读者/统计
+  KEY `idx_article` (`article_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户文章浏览统计表';
+
+-- -------------------------------------------------------------------
 -- 初始化种子数据
 -- -------------------------------------------------------------------
 -- 默认管理员账号 admin, 密码为 admin123 的 bcrypt 哈希(已验证, 可在后端登录后修改)

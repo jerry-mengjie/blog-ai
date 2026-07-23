@@ -13,6 +13,7 @@
 | 后端 | `backend-blog` | FastAPI + SQLAlchemy 2.0(async) + aiomysql + MySQL 9.7 + JWT | uv 管理依赖，异步高性能 |
 | AI 问答 | `backend-blog/app/ai` | LangChain(LCEL) + Milvus 2.6 + OpenAI 兼容 API(百炼) + RAG + SSE | 文章底部智能问答，详见 [docs/AI.md](docs/AI.md) |
 | 用户管理 | `backend-blog` + `frontend-admin` | 管理端用户 / 兴趣标签(复用文章标签) | 详见 [docs/USER_ADMIN.md](docs/USER_ADMIN.md) |
+| 浏览统计 | `backend-blog` + 双前端 | 用户×文章累计次数/时长/最好浏览时间 | 详见 [docs/USER_BROWSE.md](docs/USER_BROWSE.md) |
 | 移动端 | `frontend-app` | Vue3 + Vite + Vant 4 + Pinia + Vue Router + Axios | 面向 C 端用户 |
 | 管理后台 | `frontend-admin` | Vue3 + Vite + Element Plus + Pinia + Vue Router + Axios | 含 RBAC 权限控制 |
 
@@ -39,7 +40,7 @@
                   ┌──────────────────┐  ┌──────────────────────┐
                   │ MySQL 9.7        │  │ Milvus 向量库         │
                   │ 「blog_ai」       │  │ 文章分块向量 + 过滤索引 │
-                  │ 8 张表 + 索引优化 │  └──────────────────────┘
+                  │ 9 张表 + 索引优化 │  └──────────────────────┘
                   └──────────────────┘
 ```
 
@@ -98,7 +99,7 @@ npm run dev             # 默认 http://localhost:5174
 
 ---
 
-## 4. 数据库设计（8 张表）
+## 4. 数据库设计（9 张表）
 
 命名规范：表名 `tb_` 前缀。详见 [`backend-blog/sql/init.sql`](backend-blog/sql/init.sql)。
 
@@ -110,10 +111,11 @@ npm run dev             # 默认 http://localhost:5174
 | `tb_tag` | 标签表 | 唯一 `name` |
 | `tb_article_tag` | 文章标签中间表 | 唯一 `(article_id, tag_id)`、索引 `tag_id` |
 | `tb_user_tag` | 用户兴趣标签中间表（复用 `tb_tag`） | 唯一 `(user_id, tag_id)`、索引 `tag_id` |
+| `tb_user_browse` | 用户文章浏览统计（累计） | 唯一 `(user_id, article_id)`、`(user_id, last_browse_time)`、`article_id` |
 | `tb_comment` | 评论表 | 复合索引 `(article_id, create_time)`、索引 `user_id` |
 | `tb_favorite` | 收藏表 | 唯一 `(user_id, article_id)`、索引 `article_id` |
 
-> 已有库增量：[`backend-blog/sql/migrate_user_tag.sql`](backend-blog/sql/migrate_user_tag.sql)。用户管理说明见 [docs/USER_ADMIN.md](docs/USER_ADMIN.md)。
+> 兴趣标签：[docs/USER_ADMIN.md](docs/USER_ADMIN.md)；浏览统计：[docs/USER_BROWSE.md](docs/USER_BROWSE.md)。增量迁移见 `sql/migrate_*.sql`。
 
 ---
 
@@ -146,6 +148,9 @@ npm run dev             # 默认 http://localhost:5174
 | 评论 | DELETE | `/api/comment/del/{id}` | 删除评论 | 是(本人/管理员) |
 | 收藏 | POST | `/api/favorite/add` | 收藏/取消收藏 | 是 |
 | 收藏 | GET | `/api/favorite/list` | 我的收藏 | 是 |
+| 浏览 | POST | `/api/browse/report` | 上报浏览(次数/时长) | 是 |
+| 浏览 | GET | `/api/browse/list` | 我的足迹 | 是 |
+| 管理端浏览 | GET | `/api/admin/browse/list` | 浏览统计列表 | 管理员 |
 | AI | GET | `/api/ai/config` | AI 开关 + 预设问题 | 否 |
 | AI | POST | `/api/ai/ask` | 文章问答(SSE 流式) | 否(限流) |
 | AI | POST | `/api/ai/reindex` | 全量重建向量索引 | 管理员 |
@@ -164,16 +169,17 @@ npm run dev             # 默认 http://localhost:5174
 
 ### 移动端（5 页）
 - `index.vue` 首页：文章聚合 + 分类导航 + 热门推荐 + 上拉加载/下拉刷新
-- `article-detail.vue` 文章详情：正文 + AI 问答（`components/ai-ask.vue`）+ 评论区 + 收藏
+- `article-detail.vue` 文章详情：正文 + AI 问答（`components/ai-ask.vue`）+ 评论区 + 收藏 + 登录用户停留上报
 - `search.vue` 搜索页
-- `personal.vue` 个人中心：登录/注册 + 资料修改 + 我的收藏
+- `personal.vue` 个人中心：登录/注册 + 资料修改 + 我的足迹 + 我的收藏
 - `about.vue` 关于本站
 
-### 管理后台（4 页）
+### 管理后台（5 页）
 - `admin-login.vue` 登录（仅管理员可进入）
 - `admin-article.vue` 文章管理（增 / 改 / 删 / 搜索 / 分页）
 - `admin-category-tag.vue` 分类标签管理
 - `admin-user.vue` 用户管理（资料 / 状态 / 兴趣标签）
+- `admin-browse.vue` 浏览统计（次数 / 时长 / 最好浏览时间）
 
 ---
 
@@ -220,6 +226,7 @@ blog_ai/
 ├── README.md                 # 本文档
 ├── docs/AI.md                # AI 问答功能文档(RAG 架构/接口/性能优化)
 ├── docs/USER_ADMIN.md        # 管理端用户管理与兴趣标签文档
+├── docs/USER_BROWSE.md       # 用户文章浏览统计文档
 ├── deploy/milvus/            # Milvus standalone 官方 Docker Compose 编排
 ├── backend-blog/             # 后端
 │   ├── pyproject.toml        # uv 依赖

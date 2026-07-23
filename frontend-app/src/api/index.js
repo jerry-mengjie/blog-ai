@@ -66,3 +66,11 @@ export const favoriteApi = {
   // 我的收藏
   list: () => request.get('/api/favorite/list')
 }
+
+// 浏览足迹接口(登录用户)
+export const browseApi = {
+  // 上报一次浏览(次数+1, 累加时长); silent 避免离开页弹错
+  report: (data) => request.post('/api/browse/report', data, { silent: true }),
+  // 我的足迹分页
+  list: (params) => request.get('/api/browse/list', { params })
+}
