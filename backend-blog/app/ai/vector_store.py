@@ -14,6 +14,9 @@
 # 导入 uuid 用于生成确定性的主键
 import uuid
 
+# 导入 numpy 做向量均值聚合(pymilvus 自带依赖)
+import numpy as np
+
 # 导入 LangChain 文档对象(向量库读写的标准载体)
 from langchain_core.documents import Document
 # 导入 LangChain Milvus 向量存储集成
@@ -191,6 +194,69 @@ async def delete_article_chunks(article_id: int) -> None:
     store = get_vector_store()
     # 按 article_id 表达式过滤删除, 命中倒排索引
     await store.adelete(expr=f"article_id == {article_id}")
+
+
+# 推荐用: 批量取文章分块向量并按文章求均值, 作为文章级语义向量(画像原料)
+async def fetch_article_mean_vectors(article_ids: list[int]) -> dict[int, list[float]]:
+    # 空入参直接返回, 避免拼出非法表达式
+    if not article_ids:
+        # 无文章无向量
+        return {}
+    # 获取向量存储(复用其内部异步客户端连接)
+    store = get_vector_store()
+    # 标量过滤: article_id 命中倒排索引, 只捞目标文章的分块
+    rows = await store.aclient.query(
+        collection_name=settings.MILVUS_COLLECTION,          # 集合名称
+        filter=f"article_id in {list(article_ids)}",         # ID 来自数据库主键, 无注入风险
+        output_fields=["article_id", "vector"],              # 只取聚合所需字段, 减少传输
+        limit=4096,                                          # 上限兜底(20 篇文章的分块远小于此)
+    )
+    # 按文章分桶收集分块向量
+    buckets: dict[int, list[list[float]]] = {}
+    # 逐行归桶
+    for row in rows:
+        # 追加该分块向量到所属文章
+        buckets.setdefault(int(row["article_id"]), []).append(row["vector"])
+    # 对每篇文章的分块向量取均值, 得到文章级语义向量
+    return {
+        aid: np.mean(np.asarray(vecs, dtype=np.float32), axis=0).tolist()
+        for aid, vecs in buckets.items()
+    }
+
+
+# 推荐用: 按画像向量召回相似文章(分块级检索后聚合到文章级, 取每篇最高分)
+async def search_article_ids_by_vector(
+    vector: list[float],
+    exclude_ids: list[int],
+    limit: int,
+) -> list[dict]:
+    # 获取向量存储
+    store = get_vector_store()
+    # 排除已读/已收藏文章: not in 走倒排索引, 引擎侧完成过滤
+    expr = f"article_id not in {list(exclude_ids)}" if exclude_ids else None
+    # 分块级向量检索: 候选块数取目标文章数的 4 倍, 保证聚合后数量充足
+    hits = await store.aclient.search(
+        collection_name=settings.MILVUS_COLLECTION,          # 集合名称
+        data=[vector],                                       # 画像向量(单条查询)
+        anns_field="vector",                                 # 向量字段
+        filter=expr,                                         # 排除表达式(可为 None)
+        limit=min(limit * 4, 256),                           # TopK 缓冲, 封顶防止极端参数
+        output_fields=["article_id"],                        # 聚合只需文章 ID
+        search_params={"metric_type": "COSINE", "params": {"ef": 128}},  # ef 高于 TopK 保证召回率
+    )
+    # 文章级聚合: 同一文章取其最高分块得分
+    best: dict[int, float] = {}
+    # 遍历首条查询的命中块
+    for hit in hits[0]:
+        # 取块所属文章 ID
+        aid = int(hit["entity"]["article_id"])
+        # 保留该文章的最高得分
+        best[aid] = max(best.get(aid, 0.0), float(hit["distance"]))
+    # 按得分倒序输出前 limit 篇
+    return [
+        {"article_id": aid, "score": score}
+        for aid, score in sorted(best.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    ]
 
 
 # 相似度检索: 在指定范围(当前文章 / 当前分类)内查询与问题最相关的分块

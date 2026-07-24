@@ -3,8 +3,8 @@
 # 导入日期时间类型
 from datetime import datetime
 
-# 导入字段类型
-from sqlalchemy import BigInteger, DateTime, Integer, SmallInteger, String, Text, func
+# 导入字段类型与索引工具
+from sqlalchemy import BigInteger, DateTime, Index, Integer, SmallInteger, String, Text, func
 # 导入映射工具
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,6 +16,13 @@ from app.core.database import Base
 class Article(Base):
     # 绑定表名
     __tablename__ = "tb_article"
+    # 复合索引(推荐兜底查询用)
+    __table_args__ = (
+        # 兜底"最新": 状态过滤 + 时间倒序免 filesort
+        Index("idx_status_create", "status", "create_time"),
+        # 兜底"热门": 状态过滤 + 浏览量倒序免 filesort
+        Index("idx_status_view", "status", "view_count"),
+    )
 
     # 主键 ID
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)

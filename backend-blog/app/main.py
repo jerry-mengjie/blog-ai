@@ -17,7 +17,7 @@ from app.core.database import Base, engine
 # 确保所有模型被导入以注册到 Base.metadata
 from app import models  # noqa: F401
 # 导入各业务路由
-from app.api import admin_browse, admin_user, ai, article, browse, category, comment, favorite, tag, user
+from app.api import admin_browse, admin_user, ai, article, browse, category, comment, favorite, rec, tag, user
 # 导入 AI 开关判断
 from app.ai.llm import ai_enabled
 # 导入 Milvus 集合初始化与连接释放
@@ -99,3 +99,4 @@ app.include_router(favorite.router)   # 收藏模块
 app.include_router(browse.router)     # 浏览足迹(用户×文章累计)
 app.include_router(admin_browse.router)  # 管理端-浏览统计
 app.include_router(ai.router)         # AI 问答模块(RAG)
+app.include_router(rec.router)        # 推荐模块(LangGraph 多节点)

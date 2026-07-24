@@ -67,6 +67,12 @@ export const favoriteApi = {
   list: () => request.get('/api/favorite/list')
 }
 
+// 推荐模块接口(匿名可用, 登录后个性化)
+export const recApi = {
+  // 推荐文章列表: 画像向量 → 兴趣标签 → 兜底(LangGraph 多节点)
+  articles: (params) => request.get('/api/rec/articles', { params })
+}
+
 // 浏览足迹接口(登录用户)
 export const browseApi = {
   // 上报一次浏览(次数+1, 累加时长); silent 避免离开页弹错

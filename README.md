@@ -12,6 +12,7 @@
 | --- | --- | --- | --- |
 | 后端 | `backend-blog` | FastAPI + SQLAlchemy 2.0(async) + aiomysql + MySQL 9.7 + JWT | uv 管理依赖，异步高性能 |
 | AI 问答 | `backend-blog/app/ai` | LangChain(LCEL) + Milvus 2.6 + OpenAI 兼容 API(百炼) + RAG + SSE | 文章底部智能问答，详见 [docs/AI.md](docs/AI.md) |
+| 文章推荐 | `backend-blog/app/ai` | LangGraph 多节点(画像向量/兴趣标签/兜底) + Milvus | 首页个性化推荐，详见 [docs/RECOMMEND.md](docs/RECOMMEND.md) |
 | 用户管理 | `backend-blog` + `frontend-admin` | 管理端用户 / 兴趣标签(复用文章标签) | 详见 [docs/USER_ADMIN.md](docs/USER_ADMIN.md) |
 | 浏览统计 | `backend-blog` + 双前端 | 用户×文章累计次数/时长/最好浏览时间 | 详见 [docs/USER_BROWSE.md](docs/USER_BROWSE.md) |
 | 移动端 | `frontend-app` | Vue3 + Vite + Vant 4 + Pinia + Vue Router + Axios | 面向 C 端用户 |
@@ -34,6 +35,7 @@
                           │  FastAPI (async)       │
                           │  JWT 鉴权 + RBAC       │
                           │  LangChain RAG (SSE)   │
+                          │  LangGraph 推荐图      │
                           └─────┬─────────┬────────┘
               SQLAlchemy(async) │         │ LangChain: Milvus 检索 / LCEL 流式问答
                                 ▼         ▼
@@ -106,7 +108,7 @@ npm run dev             # 默认 http://localhost:5174
 | 表名 | 说明 | 关键索引 |
 | --- | --- | --- |
 | `tb_user` | 用户表 | 唯一索引 `username`，普通索引 `email`，复合索引 `(status, create_time)` |
-| `tb_article` | 文章表 | 复合索引 `(status, is_top, create_time)`、`user_id`、`category_id`、标题前缀索引 |
+| `tb_article` | 文章表 | 复合索引 `(status, is_top, create_time)`、`(status, create_time)`、`(status, view_count)`、`user_id`、`category_id`、标题前缀索引 |
 | `tb_category` | 分类表 | 唯一 `name`、索引 `sort` |
 | `tb_tag` | 标签表 | 唯一 `name` |
 | `tb_article_tag` | 文章标签中间表 | 唯一 `(article_id, tag_id)`、索引 `tag_id` |
@@ -154,6 +156,7 @@ npm run dev             # 默认 http://localhost:5174
 | AI | GET | `/api/ai/config` | AI 开关 + 预设问题 | 否 |
 | AI | POST | `/api/ai/ask` | 文章问答(SSE 流式) | 否(限流) |
 | AI | POST | `/api/ai/reindex` | 全量重建向量索引 | 管理员 |
+| 推荐 | GET | `/api/rec/articles` | 个性化文章推荐(LangGraph) | 可选(匿名兜底) |
 
 统一响应格式：
 
@@ -168,7 +171,7 @@ npm run dev             # 默认 http://localhost:5174
 ## 6. 前端页面
 
 ### 移动端（5 页）
-- `index.vue` 首页：文章聚合 + 分类导航 + 热门推荐 + 上拉加载/下拉刷新
+- `index.vue` 首页：分类 Tabs（为你推荐 | 置顶 | 全部 | 分类）+ 上拉加载/下拉刷新
 - `article-detail.vue` 文章详情：正文 + AI 问答（`components/ai-ask.vue`）+ 评论区 + 收藏 + 登录用户停留上报
 - `search.vue` 搜索页
 - `personal.vue` 个人中心：登录/注册 + 资料修改 + 我的足迹 + 我的收藏
@@ -217,6 +220,11 @@ npm run dev             # 默认 http://localhost:5174
 - 向量索引通过 `BackgroundTasks` 响应后异步同步，发文接口零阻塞。
 - 问答接口只查必要列不加载正文大字段；单 IP 滑动窗口限流防刷。
 
+**推荐层**（详见 [docs/RECOMMEND.md](docs/RECOMMEND.md)）
+- LangGraph 图编译单例，节点全异步；画像复用问答的分块向量，零新增 embedding 成本。
+- 行为/标签/兜底查询分别命中 `idx_user_last`、`idx_tag`、`(status, create_time)`/`(status, view_count)` 索引。
+- Milvus 排除已读用 `not in` 走倒排索引，引擎侧完成过滤；分块检索后文章级聚合取最高分。
+
 ---
 
 ## 9. 目录结构
@@ -225,6 +233,7 @@ npm run dev             # 默认 http://localhost:5174
 blog_ai/
 ├── README.md                 # 本文档
 ├── docs/AI.md                # AI 问答功能文档(RAG 架构/接口/性能优化)
+├── docs/RECOMMEND.md         # 文章推荐系统文档(LangGraph 多节点/召回策略)
 ├── docs/USER_ADMIN.md        # 管理端用户管理与兴趣标签文档
 ├── docs/USER_BROWSE.md       # 用户文章浏览统计文档
 ├── deploy/milvus/            # Milvus standalone 官方 Docker Compose 编排
@@ -238,7 +247,7 @@ blog_ai/
 │       ├── models/           # SQLAlchemy 模型
 │       ├── schemas/          # Pydantic 模型
 │       ├── api/              # 路由 + 依赖(鉴权/RBAC)
-│       └── ai/               # LangChain RAG: 模型单例/分块/向量库/索引同步/LCEL 问答链
+│       └── ai/               # LangChain RAG + LangGraph 推荐: 模型单例/分块/向量库/索引同步/问答链/推荐图
 ├── frontend-app/             # 移动端 (Vue3 + Vant)
 │   └── src/{api,components,store,router,views}
 └── frontend-admin/           # 管理后台 (Vue3 + Element Plus)

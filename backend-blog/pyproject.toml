@@ -25,6 +25,7 @@ dependencies = [
     "langchain-milvus>=0.3.3",    # LangChain Milvus 向量存储集成
     "langchain-text-splitters>=1.1.2",  # LangChain 文本分块(RecursiveCharacterTextSplitter)
     "rich>=15.0.0",
+    "langgraph>=1.2.9",
 ]
 
 # 开发依赖分组(uv / PEP 735)

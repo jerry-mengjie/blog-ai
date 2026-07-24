@@ -82,7 +82,11 @@ CREATE TABLE `tb_article` (
   -- 复合索引: 列表页常用 "状态过滤 + 置顶优先 + 时间倒序", 命中索引避免 filesort
   KEY `idx_status_top_time` (`status`, `is_top`, `create_time`),
   -- 标题前缀索引, 兼顾搜索与索引体积(全文检索可改用 FULLTEXT)
-  KEY `idx_title` (`title`(64))
+  KEY `idx_title` (`title`(64)),
+  -- 推荐兜底"最新文章": 状态过滤 + 时间倒序, 命中索引避免 filesort
+  KEY `idx_status_create` (`status`, `create_time`),
+  -- 推荐兜底"热门文章": 状态过滤 + 浏览量倒序, 命中索引避免 filesort
+  KEY `idx_status_view` (`status`, `view_count`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='文章表';
 
 -- -------------------------------------------------------------------

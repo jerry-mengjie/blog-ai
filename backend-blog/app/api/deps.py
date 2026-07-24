@@ -52,6 +52,37 @@ async def get_current_user(
     return user
 
 
+# 依赖: 可选登录, 解析成功返回用户, 未登录/令牌无效返回 None(推荐等公开接口用)
+async def get_current_user_optional(
+    # 从请求头读取 Authorization 字段(允许为空)
+    authorization: str = Header(default=""),
+    # 注入数据库会话
+    db: AsyncSession = Depends(get_db),
+) -> User | None:
+    # 无 Bearer 令牌视为匿名访问
+    if not authorization.startswith("Bearer "):
+        # 匿名返回 None, 不抛异常
+        return None
+    # 截取实际令牌字符串
+    token = authorization[7:]
+    # 解析令牌得到载荷
+    payload = decode_access_token(token)
+    # 令牌无效同样按匿名处理
+    if not payload or "sub" not in payload:
+        # 匿名返回 None
+        return None
+    # 根据载荷中的用户 ID 查询用户
+    result = await db.execute(select(User).where(User.id == int(payload["sub"])))
+    # 取出唯一用户(可能为 None)
+    user = result.scalar_one_or_none()
+    # 用户不存在或被禁用按匿名处理
+    if not user or user.status != 1:
+        # 匿名返回 None
+        return None
+    # 返回当前用户对象
+    return user
+
+
 # 依赖: 在登录基础上进一步校验是否为管理员(RBAC 后台权限控制)
 async def require_admin(
     # 复用当前用户依赖
