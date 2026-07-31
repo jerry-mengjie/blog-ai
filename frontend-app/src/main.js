@@ -6,10 +6,15 @@ import { createPinia } from 'pinia'
 import App from './App.vue'
 // 引入路由实例
 import router from './router'
+// 将真实 router 注入 api 层代理, 供 401 跳转使用
+import { setRouter } from './api/navigate'
 // 引入 Vant 全局样式(组件本身按需自动导入)
 import 'vant/lib/index.css'
 // 引入自定义全局样式
 import './style.css'
+
+// 注入 router, 使 api 拦截器可调用 router.push
+setRouter(router)
 
 // 创建应用实例
 const app = createApp(App)

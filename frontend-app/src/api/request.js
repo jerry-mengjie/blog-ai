@@ -2,8 +2,8 @@
 import axios from 'axios'
 // 引入 Vant 轻提示
 import { showToast } from 'vant'
-// 引入路由用于登录失效跳转
-import router from '../router'
+// 引入可注入的 router 代理(入口挂载真实实例后可用)
+import { router } from './navigate'
 
 // 创建 axios 实例
 const request = axios.create({
