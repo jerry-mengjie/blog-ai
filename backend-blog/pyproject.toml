@@ -26,6 +26,8 @@ dependencies = [
     "langchain-text-splitters>=1.1.2",  # LangChain 文本分块(RecursiveCharacterTextSplitter)
     "rich>=15.0.0",
     "langgraph>=1.2.9",
+    # RocketMQ 5.x 官方 Python 客户端(Producer + SimpleConsumer, 走 Proxy gRPC)
+    "rocketmq-python-client>=5.0.0",
 ]
 
 # 开发依赖分组(uv / PEP 735)

@@ -1,9 +1,11 @@
-"""用户文章浏览领域服务: 上报累计 / 我的足迹 / 管理端分页。
+"""用户文章浏览领域服务: 上报累计 / 文章 PV / 我的足迹 / 管理端分页。
 
 性能要点:
 1. 上报用 INSERT ... ON DUPLICATE KEY UPDATE 单语句原子累计, 避免先查后改竞态
-2. 列表只选必要列, JOIN 文章标题等展示字段, 不拉正文
-3. 我的足迹命中 idx_user_last; 管理端按 article 反查命中 idx_article
+2. 文章 PV 用 UPDATE view_count = view_count + 1 原子自增, 避免 ORM 读改写丢更新
+3. 列表只选必要列, JOIN 文章标题等展示字段, 不拉正文
+4. 我的足迹命中 idx_user_last; 管理端按 article 反查命中 idx_article
+5. 写路径可由 RocketMQ Worker 调用; 读路径仍直连 MySQL
 """
 
 # 导入文本 SQL 与查询/聚合工具
@@ -64,6 +66,23 @@ async def report_browse(
             """
         ),
         {"user_id": user_id, "article_id": article_id, "duration": seconds},
+    )
+    # 提交事务
+    await db.commit()
+
+
+# 文章全局浏览量原子 +1(供 MQ 消费或同步回落调用)
+async def incr_article_view(db: AsyncSession, article_id: int) -> None:
+    # SQL 层自增, 并发安全且单 round-trip
+    await db.execute(
+        text(
+            """
+            UPDATE tb_article
+            SET view_count = view_count + 1
+            WHERE id = :article_id AND status = 1
+            """
+        ),
+        {"article_id": article_id},
     )
     # 提交事务
     await db.commit()

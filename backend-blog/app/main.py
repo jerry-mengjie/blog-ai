@@ -22,6 +22,8 @@ from app.api import admin_browse, admin_user, ai, article, browse, category, com
 from app.ai.llm import ai_enabled
 # 导入 Milvus 集合初始化与连接释放
 from app.ai.vector_store import close_vector_store, ensure_collection
+# 导入 RocketMQ Producer 关闭(进程退出时释放)
+from app.mq.producer import shutdown_producer
 
 
 # 应用生命周期: 启动时可选自动建表, 关闭时释放引擎连接池
@@ -37,6 +39,8 @@ async def lifespan(app: FastAPI):
         await ensure_collection()
     # yield 之前为启动逻辑, 之后为关闭逻辑
     yield
+    # 关闭阶段: 释放 RocketMQ Producer(未启用时为空操作)
+    shutdown_producer()
     # 关闭阶段: 释放 Milvus 客户端连接
     await close_vector_store()
     # 关闭阶段: 释放数据库连接池

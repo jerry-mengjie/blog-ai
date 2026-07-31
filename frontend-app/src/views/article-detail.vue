@@ -18,6 +18,7 @@ const favorited = ref(false)
 const articleId = route.params.id
 
 // ---------- 浏览计时(仅登录用户上报) ----------
+// 后端优先投递 RocketMQ 异步落库; 本页仍 fire-and-forget, 离开时静默上报
 let activeStart = 0
 let accumulatedMs = 0
 let reported = false
@@ -36,13 +37,14 @@ const onVisibility = () => {
   else if (userStore.isLogin) activeStart = Date.now()
 }
 
-// 上报本次停留(静默失败, 避免离开页时弹 Toast/跳转干扰)
+// 上报本次停留(静默失败; 后端 async 写库后「我的足迹」可能略有延迟)
 const reportBrowse = async () => {
   if (!userStore.isLogin || reported) return
   reported = true
   flushVisible()
   const duration = Math.floor(accumulatedMs / 1000)
   try {
+    // POST /api/browse/report → MQ Tag=report(或同步回落)
     await browseApi.report({ article_id: Number(articleId), duration })
   } catch (_) {
     // 忽略: 离开页时网络/401 不打断体验

@@ -75,8 +75,8 @@ export const recApi = {
 
 // 浏览足迹接口(登录用户)
 export const browseApi = {
-  // 上报一次浏览(次数+1, 累加时长); silent 避免离开页弹错
+  // 上报浏览: 后端优先进 RocketMQ 异步落库(失败同步回落); silent 避免离开页弹错
   report: (data) => request.post('/api/browse/report', data, { silent: true }),
-  // 我的足迹分页
+  // 我的足迹分页(读 MySQL; MQ 消费后可能略有延迟)
   list: (params) => request.get('/api/browse/list', { params })
 }

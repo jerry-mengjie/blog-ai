@@ -7,8 +7,8 @@ from sqlalchemy import delete, func, select
 # 导入异步会话类型
 from sqlalchemy.ext.asyncio import AsyncSession
 
-# 导入数据库会话依赖
-from app.core.database import get_db
+# 导入数据库会话依赖与后台任务用会话工厂
+from app.core.database import AsyncSessionLocal, get_db
 # 导入统一响应
 from app.core.response import Result, ok
 # 导入当前用户依赖
@@ -19,6 +19,8 @@ from app.ai.indexer import index_article, remove_article_index
 from app.models.article import Article
 from app.models.tag import ArticleTag, Tag
 from app.models.user import User
+# 导入 RocketMQ 文章 PV 投递(详情接口异步解耦写库)
+from app.mq.producer import publish_article_pv
 # 导入文章 schema
 from app.schemas.article import (
     ArticleCreateReq,
@@ -27,6 +29,8 @@ from app.schemas.article import (
     ArticleUpdateReq,
     PageOut,
 )
+# 导入浏览服务(PV 同步回落)
+from app.services import browse as browse_svc
 
 # 创建文章路由, 前缀 /api/article
 router = APIRouter(prefix="/api/article", tags=["文章模块"])
@@ -165,9 +169,27 @@ async def top_articles(db: AsyncSession = Depends(get_db)):
     return ok(items)
 
 
+# 响应返回后记录 PV: 优先 MQ, 失败则同步自增(自建会话, 不占用请求会话)
+async def _record_article_pv(article_id: int) -> None:
+    # 优先异步投递
+    sent = await publish_article_pv(article_id)
+    # 已进队列则由 Worker 落库
+    if sent:
+        # 无需同步写
+        return
+    # MQ 未启用/超时/失败: 独立会话原子 +1, 保证不丢
+    async with AsyncSessionLocal() as db:
+        # SQL: view_count = view_count + 1
+        await browse_svc.incr_article_view(db, article_id)
+
+
 # 4. 文章详情
 @router.get("/detail/{article_id}", response_model=Result, summary="文章详情")
-async def article_detail(article_id: int, db: AsyncSession = Depends(get_db)):
+async def article_detail(
+    article_id: int,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
     # 查询完整文章对象(含正文)
     result = await db.execute(select(Article).where(Article.id == article_id))
     # 取出文章
@@ -176,18 +198,14 @@ async def article_detail(article_id: int, db: AsyncSession = Depends(get_db)):
     if not article or article.status != 1:
         # 文章不存在
         raise HTTPException(status_code=404, detail="文章不存在")
-    # 浏览量 +1(使用原子更新避免并发覆盖)
-    article.view_count += 1
-    # 提交浏览量更新
-    await db.commit()
-    # commit 后 onupdate 字段会过期, 需异步刷新避免懒加载报错
-    await db.refresh(article)
-    # 加载标签名称
+    # 加载标签名称(与 PV 写解耦, 先读后投递)
     tags = await _load_tags(db, article_id)
-    # 构造详情对象
+    # 构造详情对象(展示当前库中的 view_count; 异步 +1 后下次请求可见)
     detail = ArticleDetail.model_validate(article)
     # 写入标签
     detail.tags = tags
+    # 读完立即返回; PV 放到响应后后台任务, 避免 MQ 卡住拖死详情接口
+    background.add_task(_record_article_pv, article_id)
     # 返回详情
     return ok(detail)
 

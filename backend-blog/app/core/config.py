@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     # 集合名称
     MILVUS_COLLECTION: str = "blog_article_chunks"
 
+    # ---------- RocketMQ(浏览统计异步写) ----------
+    # Proxy gRPC 地址; 为空则关闭 MQ, API 同步写库(本地无 MQ 也能跑)
+    # Python 官方客户端 rocketmq-python-client 走 Proxy, 不是 NameServer 9876
+    ROCKETMQ_ENDPOINTS: str = ""
+    # 浏览统计 Topic(report/pv 共用, 用 Tag 区分)
+    ROCKETMQ_TOPIC_BROWSE: str = "blog_browse"
+    # 浏览统计消费组
+    ROCKETMQ_GROUP_BROWSE: str = "blog_browse_consumer"
+
     # ---------- RAG 检索参数 ----------
     # 单个文本块的目标字符数
     RAG_CHUNK_SIZE: int = 500

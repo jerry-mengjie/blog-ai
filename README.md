@@ -14,7 +14,8 @@
 | AI 问答 | `backend-blog/app/ai` | LangChain(LCEL) + Milvus 2.6 + OpenAI 兼容 API(百炼) + RAG + SSE | 文章底部智能问答，详见 [docs/AI.md](docs/AI.md) |
 | 文章推荐 | `backend-blog/app/ai` | LangGraph 多节点(画像向量/兴趣标签/兜底) + Milvus | 首页个性化推荐，详见 [docs/RECOMMEND.md](docs/RECOMMEND.md) |
 | 用户管理 | `backend-blog` + `frontend-admin` | 管理端用户 / 兴趣标签(复用文章标签) | 详见 [docs/USER_ADMIN.md](docs/USER_ADMIN.md) |
-| 浏览统计 | `backend-blog` + 双前端 | 用户×文章累计次数/时长/最好浏览时间 | 详见 [docs/USER_BROWSE.md](docs/USER_BROWSE.md) |
+| 浏览统计 | `backend-blog` + 双前端 + RocketMQ | 用户×文章累计次数/时长/最好浏览时间；写路径 MQ 异步 | 详见 [docs/USER_BROWSE.md](docs/USER_BROWSE.md) |
+| 消息队列 | `deploy/rocketmq` | Apache RocketMQ 5.x（NameServer + Broker + Proxy + Dashboard） | 浏览上报 / 文章 PV 解耦 |
 | 移动端 | `frontend-app` | Vue3 + Vite + Vant 4 + Pinia + Vue Router + Axios | 面向 C 端用户 |
 | 管理后台 | `frontend-admin` | Vue3 + Vite + Element Plus + Pinia + Vue Router + Axios | 含 RBAC 权限控制 |
 
@@ -36,14 +37,15 @@
                           │  JWT 鉴权 + RBAC       │
                           │  LangChain RAG (SSE)   │
                           │  LangGraph 推荐图      │
-                          └─────┬─────────┬────────┘
-              SQLAlchemy(async) │         │ LangChain: Milvus 检索 / LCEL 流式问答
-                                ▼         ▼
-                  ┌──────────────────┐  ┌──────────────────────┐
-                  │ MySQL 9.7        │  │ Milvus 向量库         │
-                  │ 「blog_ai」       │  │ 文章分块向量 + 过滤索引 │
-                  │ 9 张表 + 索引优化 │  └──────────────────────┘
-                  └──────────────────┘
+                          │  RocketMQ Producer     │
+                          └──┬─────┬───────┬───────┘
+             SQLAlchemy(async)│     │       │ browse/PV 异步投递
+                              ▼     ▼       ▼
+                ┌──────────┐ ┌──────────┐ ┌─────────────────┐
+                │ MySQL    │ │ Milvus   │ │ RocketMQ 5.x    │
+                │ blog_ai  │ │ 分块向量 │ │ Proxy:8022      │
+                └──────────┘ └──────────┘ │ Worker 消费落库 │
+                                          └─────────────────┘
 ```
 
 ---
@@ -71,17 +73,42 @@ docker compose up -d
 
 > AI 问答还需在 `backend-blog/.env` 中填入 `AI_API_KEY`（阿里云百炼）。留空则 AI 功能自动关闭，其余功能不受影响。存量文章需管理员调用 `POST /api/ai/reindex` 建一次索引。详见 [docs/AI.md](docs/AI.md)。
 
-### 3.3 后端 backend-blog
+### 3.3 RocketMQ（浏览统计异步写，推荐启用）
+
+Python 官方客户端走 **Proxy gRPC（宿主机 8022）**，不是 NameServer 9876。仓库已提供含 Proxy + Dashboard 的编排：
+
+```bash
+cd deploy/rocketmq
+docker compose up -d
+# 管理后台: http://127.0.0.1:8020
+```
+
+手动 `docker run` 时需 NameServer + Broker（`autoCreateTopicEnable=true`）+ Proxy。详情与回落策略见 [docs/USER_BROWSE.md](docs/USER_BROWSE.md)。
+
+在 `backend-blog/.env` 配置：
+
+```bash
+ROCKETMQ_ENDPOINTS=127.0.0.1:8022
+ROCKETMQ_TOPIC_BROWSE=blog_browse
+ROCKETMQ_GROUP_BROWSE=blog_browse_consumer
+```
+
+留空 `ROCKETMQ_ENDPOINTS` 则关闭 MQ，接口同步写库（无 Worker 也能跑通）。
+
+### 3.4 后端 backend-blog
 
 ```bash
 cd backend-blog
 uv sync                 # 创建虚拟环境并安装依赖
 uv run uvicorn app.main:app --reload --port 8000
+
+# 另开终端启动浏览统计 Worker（启用 MQ 时需要）
+uv run python -m app.mq.worker
 ```
 
 启动后访问交互式文档：<http://127.0.0.1:8000/docs>
 
-### 3.4 移动端 frontend-app
+### 3.5 移动端 frontend-app
 
 ```bash
 cd frontend-app
@@ -89,7 +116,7 @@ npm install
 npm run dev             # 默认 http://localhost:5173
 ```
 
-### 3.5 管理后台 frontend-admin
+### 3.6 管理后台 frontend-admin
 
 ```bash
 cd frontend-admin
@@ -202,12 +229,14 @@ npm run dev             # 默认 http://localhost:5174
 - 列表/搜索查询**只选必要列**，不加载 `content` 大字段。
 - 文章列表命中复合索引 `(status, is_top, create_time)`，避免 `filesort`。
 - 收藏、文章标签使用唯一索引防重并加速「是否存在」判断。
-- 浏览量自增使用对象级原子更新。
+- 浏览量自增使用 SQL `view_count = view_count + 1`（非 ORM 读改写），并发不丢更新。
+- 用户浏览用 `INSERT ... ON DUPLICATE KEY UPDATE` 单语句原子累计。
 
 **后端层**
 - 全异步（FastAPI + async SQLAlchemy + aiomysql），高并发吞吐。
 - 连接池：`pool_size=20 / max_overflow=10 / pool_pre_ping / pool_recycle=28000`，与 MySQL 9.7 `wait_timeout` 对齐。
 - JWT 无状态鉴权，水平扩展友好。
+- 浏览上报 / 文章 PV 经 RocketMQ 异步落库（Producer + SimpleConsumer），投递失败同步回落。
 
 **前端层**
 - 路由懒加载（代码分割），首屏更快。
@@ -235,11 +264,12 @@ blog_ai/
 ├── docs/AI.md                # AI 问答功能文档(RAG 架构/接口/性能优化)
 ├── docs/RECOMMEND.md         # 文章推荐系统文档(LangGraph 多节点/召回策略)
 ├── docs/USER_ADMIN.md        # 管理端用户管理与兴趣标签文档
-├── docs/USER_BROWSE.md       # 用户文章浏览统计文档
+├── docs/USER_BROWSE.md       # 用户文章浏览统计文档(含 RocketMQ 异步链路)
 ├── deploy/milvus/            # Milvus standalone 官方 Docker Compose 编排
+├── deploy/rocketmq/          # RocketMQ NameServer + Broker + Proxy + Dashboard 编排
 ├── backend-blog/             # 后端
 │   ├── pyproject.toml        # uv 依赖
-│   ├── .env                  # 环境配置(DB/JWT/CORS/AI/Milvus)
+│   ├── .env                  # 环境配置(DB/JWT/CORS/AI/Milvus/RocketMQ)
 │   ├── sql/init.sql          # 建表 + 索引 + 种子数据
 │   └── app/
 │       ├── main.py           # 应用入口(路由/中间件/异常)
@@ -247,6 +277,7 @@ blog_ai/
 │       ├── models/           # SQLAlchemy 模型
 │       ├── schemas/          # Pydantic 模型
 │       ├── api/              # 路由 + 依赖(鉴权/RBAC)
+│       ├── mq/               # RocketMQ: Producer / Worker / 消息体(浏览统计)
 │       └── ai/               # LangChain RAG + LangGraph 推荐: 模型单例/分块/向量库/索引同步/问答链/推荐图
 ├── frontend-app/             # 移动端 (Vue3 + Vant)
 │   └── src/{api,components,store,router,views}

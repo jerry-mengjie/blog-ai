@@ -1,0 +1,55 @@
+# RocketMQ 本地调试: NameServer + Broker + Proxy + Dashboard
+# Python 客户端走 Proxy gRPC → 127.0.0.1:8022 (不是 NameServer 9876)
+# 启动: cd deploy/rocketmq && docker compose up -d
+# 管理台: http://127.0.0.1:8020
+# Proxy 监听端口须与宿主机映射一致(rmq-proxy.json), 否则客户端会被导向容器内默认 8081
+
+services:
+  namesrv:
+    image: apache/rocketmq:5.3.1
+    container_name: rmq-namesrv
+    command: sh mqnamesrv
+    restart: unless-stopped
+
+  # 勿设 brokerIP1=127.0.0.1: Dashboard/Proxy 需经 Docker 网访问 Broker
+  broker:
+    image: apache/rocketmq:5.3.1
+    container_name: rmq-broker
+    depends_on:
+      - namesrv
+    environment:
+      NAMESRV_ADDR: namesrv:9876
+    command: >
+      sh mqbroker -n namesrv:9876
+      autoCreateTopicEnable=true
+      autoCreateSubscriptionGroup=true
+    restart: unless-stopped
+
+  # CLUSTER 模式: 路由回写客户端接入点; 端口与宿主机一致
+  proxy:
+    image: apache/rocketmq:5.3.1
+    container_name: rmq-proxy
+    depends_on:
+      - broker
+      - namesrv
+    ports:
+      - "8021:8021"
+      - "8022:8022"
+    volumes:
+      - ./rmq-proxy.json:/tmp/rmq-proxy.json:ro
+    environment:
+      NAMESRV_ADDR: namesrv:9876
+    command: sh mqproxy -pc /tmp/rmq-proxy.json
+    restart: unless-stopped
+
+  # 镜像内 Tomcat 监听 8082
+  dashboard:
+    image: apacherocketmq/rocketmq-dashboard:latest
+    container_name: rmq-dashboard
+    depends_on:
+      - namesrv
+    ports:
+      - "8020:8082"
+    environment:
+      JAVA_OPTS: "-Drocketmq.namesrv.addr=namesrv:9876"
+    restart: unless-stopped
