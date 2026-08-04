@@ -47,6 +47,24 @@ class Settings(BaseSettings):
     # 集合名称
     MILVUS_COLLECTION: str = "blog_article_chunks"
 
+    # ---------- Redis(文章列表多级缓存 L2) ----------
+    # 主机; 为空则关闭 Redis, 列表仅用进程内 L1
+    REDIS_HOST: str = "127.0.0.1"
+    # 端口(docker -p 6379:6379)
+    REDIS_PORT: int = 6379
+    # 密码(与 redis-server --requirepass 一致)
+    REDIS_PASSWORD: str = "123456"
+    # 逻辑库编号
+    REDIS_DB: int = 0
+    # 连接池上限, 避免瞬时打满 Redis
+    REDIS_MAX_CONNECTIONS: int = 50
+    # 建连/读写超时秒数, 超时快速失败走回源
+    REDIS_SOCKET_TIMEOUT: float = 2.0
+    # 文章列表第 1 页缓存 TTL(秒)
+    ARTICLE_LIST_CACHE_TTL: int = 60
+    # L1 本地缓存最大条目数
+    ARTICLE_LIST_L1_MAXSIZE: int = 256
+
     # ---------- RocketMQ(浏览统计异步写) ----------
     # Proxy gRPC 地址; 为空则关闭 MQ, API 同步写库(本地无 MQ 也能跑)
     # Python 官方客户端 rocketmq-python-client 走 Proxy, 不是 NameServer 9876

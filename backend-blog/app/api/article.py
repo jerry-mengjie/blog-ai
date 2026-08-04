@@ -1,4 +1,8 @@
-"""文章模块路由: 列表/详情/发布/编辑/删除/置顶/搜索 (7 个接口)。"""
+"""文章模块路由: 列表/详情/发布/编辑/删除/置顶/搜索 (7 个接口)。
+
+列表第 1 页走 services.article 多级缓存(L1 内存 + L2 Redis);
+写路径在提交后失效缓存, 保证分类 Tab 首页数据最终一致。
+"""
 
 # 导入路由与依赖工具(BackgroundTasks 用于响应后异步同步向量索引)
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
@@ -31,6 +35,8 @@ from app.schemas.article import (
 )
 # 导入浏览服务(PV 同步回落)
 from app.services import browse as browse_svc
+# 导入文章列表服务(多级缓存 + MySQL)
+from app.services import article as article_svc
 
 # 创建文章路由, 前缀 /api/article
 router = APIRouter(prefix="/api/article", tags=["文章模块"])
@@ -50,51 +56,22 @@ async def _load_tags(db: AsyncSession, article_id: int) -> list[str]:
     return list(result.scalars().all())
 
 
-# 1. 分页查询文章列表
+# 1. 分页查询文章列表(第 1 页多级缓存加速全部分类 Tab)
 @router.get("/list", response_model=Result, summary="分页查询文章列表")
 async def list_articles(
     # 页码, 默认 1, 最小 1
     page: int = Query(default=1, ge=1),
     # 每页条数, 默认 10, 范围 1-50
     page_size: int = Query(default=10, ge=1, le=50),
-    # 可选分类筛选
+    # 可选分类筛选(0/空=全部)
     category_id: int | None = Query(default=None),
     # 注入会话
     db: AsyncSession = Depends(get_db),
 ):
-    # 基础过滤条件: 仅查询已发布文章
-    conditions = [Article.status == 1]
-    # 若指定分类则追加条件
-    if category_id:
-        # 增加分类过滤
-        conditions.append(Article.category_id == category_id)
-    # 统计总条数(只查 count, 不取大字段)
-    total = await db.scalar(
-        select(func.count()).select_from(Article).where(*conditions)
-    )
-    # 查询列表, 显式选择列以避免加载 content 大字段, 命中复合索引排序
-    stmt = (
-        select(
-            Article.id,
-            Article.title,
-            Article.cover,
-            Article.summary,
-            Article.category_id,
-            Article.view_count,
-            Article.is_top,
-            Article.create_time,
-        )
-        .where(*conditions)
-        .order_by(Article.is_top.desc(), Article.create_time.desc())
-        .offset((page - 1) * page_size)  # 分页偏移
-        .limit(page_size)                # 分页大小
-    )
-    # 执行查询
-    result = await db.execute(stmt)
-    # 将每行映射为列表项 schema
-    items = [ArticleListItem.model_validate(row) for row in result.mappings().all()]
-    # 返回分页结构
-    return ok(PageOut(total=total or 0, list=items))
+    # 委托领域服务: page=1 → L1/L2 → MySQL; page>1 → 直查
+    page_out = await article_svc.list_articles(db, page, page_size, category_id)
+    # 统一信封返回
+    return ok(page_out)
 
 
 # 2. 文章搜索(放在 /detail/{id} 之前, 路径无冲突但保持清晰)
@@ -240,6 +217,8 @@ async def add_article(
     await db.commit()
     # 刷新对象
     await db.refresh(article)
+    # 失效列表多级缓存(全部 + 各分类第 1 页)
+    await article_svc.invalidate_article_list_cache()
     # 响应返回后异步构建向量索引, 不阻塞发布接口
     background.add_task(index_article, article.id)
     # 返回新文章 ID
@@ -293,6 +272,8 @@ async def update_article(
             db.add(ArticleTag(article_id=article_id, tag_id=tag_id))
     # 提交事务
     await db.commit()
+    # 列表字段/分类/状态变化后失效缓存
+    await article_svc.invalidate_article_list_cache()
     # 响应返回后异步重建向量索引(内容/分类/状态变化都会同步)
     background.add_task(index_article, article_id)
     # 返回成功
@@ -325,6 +306,8 @@ async def delete_article(
     await db.execute(delete(ArticleTag).where(ArticleTag.article_id == article_id))
     # 提交事务
     await db.commit()
+    # 删除后失效列表缓存
+    await article_svc.invalidate_article_list_cache()
     # 响应返回后异步删除该文章的向量索引
     background.add_task(remove_article_index, article_id)
     # 返回成功

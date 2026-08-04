@@ -13,15 +13,15 @@ export const userApi = {
 
 // 文章管理接口
 export const articleApi = {
-  // 分页列表
+  // 分页列表(第 1 页走后端 L1+L2 缓存; 写操作后自动失效)
   list: (params) => request.get('/api/article/list', { params }),
   // 详情
   detail: (id) => request.get(`/api/article/detail/${id}`),
-  // 新增
+  // 新增(触发列表缓存失效)
   add: (data) => request.post('/api/article/add', data),
-  // 编辑
+  // 编辑(触发列表缓存失效)
   update: (id, data) => request.put(`/api/article/update/${id}`, data),
-  // 删除
+  // 删除(触发列表缓存失效)
   del: (id) => request.delete(`/api/article/del/${id}`),
   // 搜索
   search: (params) => request.get('/api/article/search', { params })

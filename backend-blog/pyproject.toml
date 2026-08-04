@@ -28,6 +28,8 @@ dependencies = [
     "langgraph>=1.2.9",
     # RocketMQ 5.x 官方 Python 客户端(Producer + SimpleConsumer, 走 Proxy gRPC)
     "rocketmq-python-client>=5.0.0",
+    # Redis 异步客户端 + hiredis 加速协议解析(列表多级缓存 L2)
+    "redis[hiredis]>=5.0.0",
 ]
 
 # 开发依赖分组(uv / PEP 735)

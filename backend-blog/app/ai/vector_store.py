@@ -133,6 +133,8 @@ async def ensure_collection() -> None:
             )
             # 维度一致则直接复用
             if int(dim) == settings.AI_EMBED_DIM:
+                # 确保集合已 load 到内存, 避免检索前冷启动全量加载
+                client.load_collection(settings.MILVUS_COLLECTION)
                 # 无需重建
                 return
             # 维度变化(更换向量模型)时删除旧集合重建
@@ -143,6 +145,8 @@ async def ensure_collection() -> None:
             schema=_build_schema(),
             index_params=_build_index_params(),
         )
+        # 显式 load 一次, 保证检索路径零冷启动(幂等)
+        client.load_collection(settings.MILVUS_COLLECTION)
     finally:
         # 释放临时连接
         client.close()

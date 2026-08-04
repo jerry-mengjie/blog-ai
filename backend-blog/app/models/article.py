@@ -16,8 +16,12 @@ from app.core.database import Base
 class Article(Base):
     # 绑定表名
     __tablename__ = "tb_article"
-    # 复合索引(推荐兜底查询用)
+    # 复合索引(列表 / 推荐兜底查询用)
     __table_args__ = (
+        # 全部分类列表: status + 置顶优先 + 时间倒序, 免 filesort
+        Index("idx_status_top_time", "status", "is_top", "create_time"),
+        # 按分类列表: status + category + 置顶 + 时间, 覆盖 /list?category_id=
+        Index("idx_status_cat_top_time", "status", "category_id", "is_top", "create_time"),
         # 兜底"最新": 状态过滤 + 时间倒序免 filesort
         Index("idx_status_create", "status", "create_time"),
         # 兜底"热门": 状态过滤 + 浏览量倒序免 filesort

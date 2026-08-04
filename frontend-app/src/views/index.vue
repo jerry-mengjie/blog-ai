@@ -42,12 +42,15 @@ const loadTop = async () => {
 }
 
 const onLoad = async () => {
+  // 非分类列表 Tab 不拉分页接口
   if (!isList.value) {
     loading.value = false
     finished.value = true
     return
   }
+  // page=1 命中后端多级缓存; page>1 直查 MySQL
   const params = { page: page.value, page_size: 10 }
+  // 全部 Tab name=0, 与后端 cat=all 对齐
   if (activeTab.value) params.category_id = activeTab.value
   const res = await articleApi.list(params)
   articles.value.push(...res.list)

@@ -14,6 +14,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from app.core.config import settings
 # 导入数据库引擎与基类(用于可选自动建表)
 from app.core.database import Base, engine
+# 导入 Redis 客户端预热与关闭
+from app.core.redis import close_redis, get_redis, redis_enabled
 # 确保所有模型被导入以注册到 Base.metadata
 from app import models  # noqa: F401
 # 导入各业务路由
@@ -33,14 +35,29 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         # 依据模型元数据建表
         await conn.run_sync(Base.metadata.create_all)
+    # 启用 Redis 时预热连接池(PING 失败不阻断启动, 列表退化为 L1/直查)
+    if redis_enabled():
+        # 取单例客户端
+        client = get_redis()
+        # 客户端存在则探测
+        if client is not None:
+            # 忽略瞬时不可达, 后续请求再连
+            try:
+                # 经典健康检查
+                await client.ping()
+            except Exception:
+                # 启动期 Redis 不可用时静默, 读路径会 miss 回源
+                pass
     # 启用 AI 时初始化 Milvus 集合(HNSW 向量索引 + 标量倒排索引)
     if ai_enabled():
-        # 幂等操作, 已存在且维度一致时直接复用
+        # 幂等操作, 已存在且维度一致时直接复用并确保已 load
         await ensure_collection()
     # yield 之前为启动逻辑, 之后为关闭逻辑
     yield
     # 关闭阶段: 释放 RocketMQ Producer(未启用时为空操作)
     shutdown_producer()
+    # 关闭阶段: 释放 Redis 连接池
+    await close_redis()
     # 关闭阶段: 释放 Milvus 客户端连接
     await close_vector_store()
     # 关闭阶段: 释放数据库连接池

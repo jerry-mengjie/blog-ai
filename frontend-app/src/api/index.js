@@ -17,19 +17,19 @@ export const userApi = {
 
 // 文章模块接口
 export const articleApi = {
-  // 分页列表
+  // 分页列表: 后端对「全部分类第 1 页」做 L1 内存 + L2 Redis 多级缓存
   list: (params) => request.get('/api/article/list', { params }),
-  // 详情
+  // 详情(含正文; PV 异步写入, 列表浏览量允许短时缓存陈旧)
   detail: (id) => request.get(`/api/article/detail/${id}`),
-  // 发布
+  // 发布(成功后后端失效列表缓存)
   add: (data) => request.post('/api/article/add', data),
-  // 编辑
+  // 编辑(成功后后端失效列表缓存)
   update: (id, data) => request.put(`/api/article/update/${id}`, data),
-  // 删除
+  // 删除(成功后后端失效列表缓存)
   del: (id) => request.delete(`/api/article/del/${id}`),
   // 置顶列表
   top: () => request.get('/api/article/top'),
-  // 搜索
+  // 搜索(不走列表多级缓存)
   search: (params) => request.get('/api/article/search', { params })
 }
 
