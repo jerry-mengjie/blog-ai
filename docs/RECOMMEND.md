@@ -1,6 +1,6 @@
 # 博客文章推荐系统文档（LangChain + LangGraph 多节点）
 
-> 本文档由 AI 生成，覆盖架构设计、召回策略、模块拆分、接口说明与性能优化要点。
+> 本文档由 AI 生成，覆盖架构设计、L1/L2 多级缓存、召回策略、模块拆分、接口说明与性能优化要点。
 
 ---
 
@@ -9,6 +9,7 @@
 | 组件 | 选型 | 作用 |
 | --- | --- | --- |
 | 编排框架 | LangGraph `StateGraph`（经典 TypedDict 状态 + 条件路由） | 多节点推荐流程编排，一次编译进程内复用 |
+| 接口缓存 | `MultiLevelCache`（L1 内存 + L2 Redis） | 热点命中时直接跳过 LangGraph / MySQL / Milvus |
 | 向量库 | Milvus 2.6（HNSW + COSINE + 标量倒排索引） | 文章分块向量存储与画像向量召回 |
 | 向量来源 | 复用 AI 问答的文章分块向量（LangChain `OpenAIEmbeddings` 写入） | 推荐不额外调用 embedding API，零新增成本 |
 | 行为数据 | MySQL `tb_user_browse`（次数/时长）+ `tb_favorite`（收藏） | 用户偏好权重计算 |
@@ -66,8 +67,9 @@ weight = log1p(浏览次数) + log1p(停留时长分钟) + (收藏 ? 2.0 : 0)
 | 文件 | 职责 |
 | --- | --- |
 | `app/ai/recommend.py` | LangGraph 图定义：状态、5 个节点、2 处条件路由、编译单例与 `recommend_articles` 入口 |
+| `app/services/recommend.py` | 推荐缓存门面：匿名/登录分 key、L1/L2 读写、统一失效 |
 | `app/ai/vector_store.py` | 新增 `fetch_article_mean_vectors`（分块向量按文章聚合均值）与 `search_article_ids_by_vector`（按向量召回 + 文章级聚合取最高分） |
-| `app/api/rec.py` | `GET /api/rec/articles` 薄路由，登录个性化、匿名兜底 |
+| `app/api/rec.py` | `GET /api/rec/articles` 薄路由，先查缓存，miss 再进推荐图 |
 | `app/api/deps.py` | 新增 `get_current_user_optional` 可选登录依赖（匿名不抛 401） |
 | `app/schemas/rec.py` | 推荐卡片与列表响应模型 |
 | `sql/migrate_rec.sql` | 存量库增量索引（新库 `init.sql` 已含） |
@@ -105,6 +107,25 @@ weight = log1p(浏览次数) + log1p(停留时长分钟) + (收藏 ? 2.0 : 0)
 
 行为数据的采集接口复用既有浏览模块：`POST /api/browse/report`（次数 + 停留时长，见 [USER_BROWSE.md](USER_BROWSE.md)）；兴趣标签由管理端维护：`PUT /api/admin/user/{id}/tags`（见 [USER_ADMIN.md](USER_ADMIN.md)）。
 
+### 4.1 多级缓存 Key
+
+接口在 API 边界层启用经典多级缓存：
+
+- 匿名：`rec:articles:v1:anon:size:{size}`
+- 登录：`rec:articles:v1:user:{user_id}:size:{size}`
+
+命中链路：
+
+```text
+L1 内存 → L2 Redis → LangGraph 推荐图 → MySQL / Milvus
+```
+
+设计要点：
+
+- 匿名推荐本质是共享热点，适合聚合为单 key，命中率最高。
+- 登录推荐受浏览/收藏/标签影响更频繁，因此按 `user_id` 分 key，并使用短 TTL。
+- 文章增删改会统一清空推荐缓存，避免返回已删除、已下架或内容已变更的文章。
+
 ---
 
 ## 5. 前端集成（移动端）
@@ -125,6 +146,14 @@ weight = log1p(浏览次数) + log1p(停留时长分钟) + (收藏 ? 2.0 : 0)
 - 收藏最多聚合走 `tb_favorite.idx_article` 覆盖扫描；
 - 卡片装配一次 `IN` 批量查询，全程不取 `content` 大字段；
 - 节点内短会话用完即还连接池，不跨节点持有连接。
+
+**Redis / 多级缓存**
+
+- API 边界层优先命中 `MultiLevelCache`，命中时直接跳过 LangGraph、MySQL、Milvus；
+- L1 使用进程内字典 + TTL，单机命中零网络；
+- L2 使用 `redis.asyncio` + `ConnectionPool` + `SET EX`，跨 Worker 共享；
+- 同 key 单飞锁防击穿，匿名热点不会并发打穿底层推荐链路；
+- `REC_ARTICLE_CACHE_TTL=30`，在个性化实时性与命中率之间取经典平衡。
 
 **Milvus**
 
@@ -148,3 +177,12 @@ weight = log1p(浏览次数) + log1p(停留时长分钟) + (收藏 ? 2.0 : 0)
 | 用户未绑定兴趣标签 | 标签节点返回空候选 → 兜底接管 |
 | 库中文章不足 | 按实际数量返回，不报错 |
 | 前端推荐请求失败 | 「为你推荐」Tab 展示空态，其余 Tab 正常 |
+
+## 8. 一致性与失效策略
+
+| 事件 | 策略 |
+| --- | --- |
+| 文章新增 / 编辑 / 删除 | 立即清空推荐缓存前缀 |
+| 浏览 / 收藏 / 用户兴趣标签变化 | 不主动删 key，依赖短 TTL 自然收敛 |
+| 匿名高并发 | 依赖匿名共享 key + 单飞锁 |
+| 多 Worker | L1 进程隔离；Redis 为共享真相 |

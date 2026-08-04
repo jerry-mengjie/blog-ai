@@ -21,15 +21,15 @@ export const articleApi = {
   list: (params) => request.get('/api/article/list', { params }),
   // 详情(含正文; PV 异步写入, 列表浏览量允许短时缓存陈旧)
   detail: (id) => request.get(`/api/article/detail/${id}`),
-  // 发布(成功后后端失效列表缓存)
+  // 发布(成功后后端失效 list+top 缓存)
   add: (data) => request.post('/api/article/add', data),
-  // 编辑(成功后后端失效列表缓存)
+  // 编辑(成功后后端失效 list+top 缓存)
   update: (id, data) => request.put(`/api/article/update/${id}`, data),
-  // 删除(成功后后端失效列表缓存)
+  // 删除(成功后后端失效 list+top 缓存)
   del: (id) => request.delete(`/api/article/del/${id}`),
-  // 置顶列表
+  // 置顶列表: 后端 L1 内存 + L2 Redis 多级缓存(固定 Top10)
   top: () => request.get('/api/article/top'),
-  // 搜索(不走列表多级缓存)
+  // 搜索(不走 Feed 多级缓存)
   search: (params) => request.get('/api/article/search', { params })
 }
 
@@ -69,7 +69,7 @@ export const favoriteApi = {
 
 // 推荐模块接口(匿名可用, 登录后个性化)
 export const recApi = {
-  // 推荐文章列表: 画像向量 → 兴趣标签 → 兜底(LangGraph 多节点)
+  // 推荐文章列表: 后端先查 L1+L2; miss 才执行画像向量 → 兴趣标签 → 兜底
   articles: (params) => request.get('/api/rec/articles', { params })
 }
 

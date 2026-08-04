@@ -1,7 +1,7 @@
 """文章模块路由: 列表/详情/发布/编辑/删除/置顶/搜索 (7 个接口)。
 
-列表第 1 页走 services.article 多级缓存(L1 内存 + L2 Redis);
-写路径在提交后失效缓存, 保证分类 Tab 首页数据最终一致。
+列表第 1 页与置顶列表走 services.article 多级缓存(L1 内存 + L2 Redis);
+写路径在提交后统一失效, 保证首页 Feed 最终一致。
 """
 
 # 导入路由与依赖工具(BackgroundTasks 用于响应后异步同步向量索引)
@@ -37,6 +37,8 @@ from app.schemas.article import (
 from app.services import browse as browse_svc
 # 导入文章列表服务(多级缓存 + MySQL)
 from app.services import article as article_svc
+# 导入推荐缓存服务(文章变更后需清推荐结果)
+from app.services import recommend as recommend_svc
 
 # 创建文章路由, 前缀 /api/article
 router = APIRouter(prefix="/api/article", tags=["文章模块"])
@@ -119,30 +121,12 @@ async def search_articles(
     return ok(PageOut(total=total or 0, list=items))
 
 
-# 3. 置顶文章列表
+# 3. 置顶文章列表(L1 内存 + L2 Redis 多级缓存)
 @router.get("/top", response_model=Result, summary="置顶文章列表")
 async def top_articles(db: AsyncSession = Depends(get_db)):
-    # 查询置顶且已发布的文章(数量少, 直接限制 10 条)
-    stmt = (
-        select(
-            Article.id,
-            Article.title,
-            Article.cover,
-            Article.summary,
-            Article.category_id,
-            Article.view_count,
-            Article.is_top,
-            Article.create_time,
-        )
-        .where(Article.status == 1, Article.is_top == 1)
-        .order_by(Article.create_time.desc())
-        .limit(10)
-    )
-    # 执行查询
-    result = await db.execute(stmt)
-    # 映射结果
-    items = [ArticleListItem.model_validate(row) for row in result.mappings().all()]
-    # 返回列表
+    # 委托领域服务: L1 → L2 → MySQL(命中 idx_status_top_time)
+    items = await article_svc.list_top_articles(db)
+    # 统一信封返回
     return ok(items)
 
 
@@ -217,8 +201,10 @@ async def add_article(
     await db.commit()
     # 刷新对象
     await db.refresh(article)
-    # 失效列表多级缓存(全部 + 各分类第 1 页)
-    await article_svc.invalidate_article_list_cache()
+    # 失效 list + top 多级缓存
+    await article_svc.invalidate_article_caches()
+    # 失效推荐多级缓存(新增文章会影响匿名/个性化推荐)
+    await recommend_svc.invalidate_recommend_cache()
     # 响应返回后异步构建向量索引, 不阻塞发布接口
     background.add_task(index_article, article.id)
     # 返回新文章 ID
@@ -272,8 +258,10 @@ async def update_article(
             db.add(ArticleTag(article_id=article_id, tag_id=tag_id))
     # 提交事务
     await db.commit()
-    # 列表字段/分类/状态变化后失效缓存
-    await article_svc.invalidate_article_list_cache()
+    # 列表/置顶字段变化后统一失效 Feed 缓存
+    await article_svc.invalidate_article_caches()
+    # 失效推荐缓存(标题/摘要/状态/分类/置顶变化都可能影响推荐结果)
+    await recommend_svc.invalidate_recommend_cache()
     # 响应返回后异步重建向量索引(内容/分类/状态变化都会同步)
     background.add_task(index_article, article_id)
     # 返回成功
@@ -306,8 +294,10 @@ async def delete_article(
     await db.execute(delete(ArticleTag).where(ArticleTag.article_id == article_id))
     # 提交事务
     await db.commit()
-    # 删除后失效列表缓存
-    await article_svc.invalidate_article_list_cache()
+    # 删除后失效 list + top 缓存
+    await article_svc.invalidate_article_caches()
+    # 删除后失效推荐缓存, 防止返回已删除文章
+    await recommend_svc.invalidate_recommend_cache()
     # 响应返回后异步删除该文章的向量索引
     background.add_task(remove_article_index, article_id)
     # 返回成功

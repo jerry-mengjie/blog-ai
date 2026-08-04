@@ -64,6 +64,10 @@ class Settings(BaseSettings):
     ARTICLE_LIST_CACHE_TTL: int = 60
     # L1 本地缓存最大条目数
     ARTICLE_LIST_L1_MAXSIZE: int = 256
+    # 推荐文章缓存 TTL(秒); 个性化行为变动更频繁, 取更短 TTL
+    REC_ARTICLE_CACHE_TTL: int = 30
+    # 推荐文章 L1 本地缓存最大条目数(匿名 + 用户分 key)
+    REC_ARTICLE_L1_MAXSIZE: int = 512
 
     # ---------- RocketMQ(浏览统计异步写) ----------
     # Proxy gRPC 地址; 为空则关闭 MQ, API 同步写库(本地无 MQ 也能跑)

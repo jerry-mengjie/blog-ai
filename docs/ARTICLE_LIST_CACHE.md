@@ -20,7 +20,7 @@ GET /api/article/list?page=1&page_size=10&category_id={0|分类ID}
 | L2 | Redis (`SET key value EX ttl`) | 多 Worker 共享，扛住重启后冷启动 |
 | 回源 | MySQL 异步查询 | 仅投影列表列，命中复合索引 |
 
-`page >= 2`、搜索、置顶列表不走该缓存（避免 key 爆炸与低频页无效占用）。
+`page >= 2`、搜索不走该缓存（避免 key 爆炸与低频页无效占用）。置顶列表见 [ARTICLE_TOP_CACHE.md](./ARTICLE_TOP_CACHE.md)，写路径与 list 一并失效。
 
 ---
 
@@ -58,9 +58,9 @@ GET /api/article/list (page=1)
 
 POST/PUT/DELETE 文章成功提交后
         │
-        └─ invalidate_article_list_cache
-              ├─ 清空 L1
-              └─ SCAN article:list:v1:* → UNLINK
+        └─ invalidate_article_caches
+              ├─ SCAN article:list:v1:* → UNLINK + 清 L1
+              └─ SCAN article:top:v1:*  → UNLINK + 清 L1
 ```
 
 ### 缓存 Key

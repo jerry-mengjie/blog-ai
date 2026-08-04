@@ -31,6 +31,7 @@ const emptyText = computed(() => (isRec.value ? '暂无推荐内容' : isTop.val
 
 const loadRec = async () => {
   try {
+    // 推荐 Tab: 匿名按 size 共享缓存, 登录按 user_id + size 命中后端多级缓存
     recs.value = (await recApi.articles({ size: 10 })).list || []
   } catch {
     recs.value = []
@@ -38,6 +39,7 @@ const loadRec = async () => {
 }
 
 const loadTop = async () => {
+  // 置顶 Tab: 命中后端 L1+L2, 无分页
   tops.value = await articleApi.top()
 }
 
