@@ -1,0 +1,44 @@
+# 项目元数据与依赖声明, 使用 uv 进行依赖与虚拟环境管理
+[project]
+# 项目名称
+name = "backend-rag"
+# 项目版本
+version = "0.1.0"
+# 项目描述
+description = "RAG 检索微服务 FastAPI + LlamaIndex + Milvus"
+# 要求的最低 Python 版本
+requires-python = ">=3.11"
+# 运行时依赖列表
+dependencies = [
+    "fastapi>=0.115.0",                            # Web 框架
+    "uvicorn[standard]>=0.30.0",                   # ASGI 服务器(含 uvloop/httptools)
+    "pydantic>=2.7.0",                             # 数据校验与序列化
+    "pydantic-settings>=2.3.0",                    # 读取 .env 配置
+    "httpx>=0.27.0",                               # 异步 HTTP 客户端(回源 backend-blog 取文档)
+    "llama-index-core>=0.14.0",                    # LlamaIndex 核心: 节点/索引/检索器/后处理器
+    "llama-index-embeddings-openai>=0.6.0",        # OpenAI 兼容向量模型(对接阿里云百炼)
+    "llama-index-vector-stores-milvus>=1.1.0",     # LlamaIndex Milvus 向量存储集成
+    "redis[hiredis]>=5.0.0",                       # 检索结果 L2 缓存
+    "llama-index-embeddings-openai-like>=0.1.0",
+    "numpy>=2.4.6",
+]
+
+# 开发依赖分组(uv / PEP 735)
+[dependency-groups]
+dev = [
+    "ruff>=0.5.0",  # 代码风格检查与格式化
+]
+
+[tool.uv]
+# llama-index-vector-stores-milvus 默认拉 pymilvus[milvus-lite](内嵌 faiss 的本地单机版),
+# 本服务连的是 Milvus standalone(deploy/milvus), 覆盖为纯 pymilvus 去掉 faiss 重依赖
+override-dependencies = ["pymilvus>=2.6.0"]
+
+# 构建系统(供打包使用)
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# 指定打包包含的源码目录
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

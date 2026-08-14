@@ -1,4 +1,4 @@
-"""路由依赖: 解析 JWT 获取当前用户, 以及管理员权限校验。"""
+"""路由依赖: 解析 JWT 获取当前用户、管理员权限校验、服务间令牌校验。"""
 
 # 导入 FastAPI 依赖工具与异常
 from fastapi import Depends, Header, HTTPException, status
@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # 导入查询构造器
 from sqlalchemy import select
 
+# 导入全局配置
+from app.core.config import settings
 # 导入数据库会话依赖
 from app.core.database import get_db
 # 导入令牌解析函数
@@ -96,3 +98,20 @@ async def require_admin(
         )
     # 返回管理员用户对象
     return current
+
+
+# 依赖: 校验服务间调用令牌(/internal/* 专用, 与用户 JWT 体系无关)
+async def verify_internal_token(
+    # 从请求头读取令牌
+    x_internal_token: str = Header(default=""),
+) -> None:
+    # 未配置则不校验, 便于本地开发
+    if not settings.INTERNAL_TOKEN:
+        # 直通
+        return
+    # 令牌不匹配返回 401
+    if x_internal_token != settings.INTERNAL_TOKEN:
+        # 拒绝非法调用
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="服务间令牌无效"
+        )

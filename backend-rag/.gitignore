@@ -1,0 +1,13 @@
+# Python 虚拟环境与缓存
+.venv/
+__pycache__/
+*.pyc
+# uv 缓存
+.uv/
+# 环境变量文件(含敏感信息)
+# .env  # 演示项目暂保留, 真实项目请取消注释
+# LlamaIndex 本地存储(默认 SimpleVectorStore 落盘目录, 本服务用 Milvus 不会产生)
+storage/
+# IDE
+.idea/
+.vscode/

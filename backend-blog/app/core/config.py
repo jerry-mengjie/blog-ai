@@ -1,4 +1,10 @@
-"""全局配置模块: 通过 pydantic-settings 从 .env 读取配置。"""
+"""全局配置模块: 通过 pydantic-settings 从 .env 读取配置。
+
+拆分为微服务后本服务只保留「业务」相关配置:
+- MySQL / Redis / RocketMQ / JWT 归本服务
+- 向量库、分块、检索参数归 backend-rag; 对话模型、推荐参数归 backend-agent
+这里只需要知道两个下游服务的地址与共享的服务间令牌。
+"""
 
 # 从 pydantic_settings 导入配置基类
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -27,25 +33,17 @@ class Settings(BaseSettings):
     # 允许跨域的来源, 字符串形式(逗号分隔), 读取后再切分
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174"
 
-    # ---------- AI 问答 (RAG) ----------
-    # OpenAI 兼容接口的 API Key(阿里云百炼/OpenAI 等), 为空则 AI 功能返回 503
-    AI_API_KEY: str = ""
-    # OpenAI 兼容接口基础地址, 默认阿里云百炼(同时提供对话与向量模型)
-    AI_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    # 对话模型名称
-    AI_CHAT_MODEL: str = "qwen-plus"
-    # 向量模型名称
-    AI_EMBED_MODEL: str = "text-embedding-v4"
-    # 向量维度, 须与向量模型输出一致; 修改后集合会自动按新维度重建
-    AI_EMBED_DIM: int = 1024
-    # 单 IP 每分钟提问上限, 轻量防刷
-    AI_RATE_LIMIT: int = 10
-
-    # ---------- Milvus 向量库 ----------
-    # Milvus gRPC 地址(standalone 部署默认 19530 端口)
-    MILVUS_URI: str = "http://127.0.0.1:19530"
-    # 集合名称
-    MILVUS_COLLECTION: str = "blog_article_chunks"
+    # ---------- 服务间调用 ----------
+    # 服务间调用令牌: 保护 /internal/* 接口, 三个后端服务必须一致; 空则不校验
+    INTERNAL_TOKEN: str = ""
+    # backend-rag 地址(文章变更后推送索引); 为空则关闭索引同步
+    RAG_BASE_URL: str = "http://127.0.0.1:8002"
+    # backend-agent 地址(文章变更后通知失效推荐缓存); 为空则关闭通知
+    AGENT_BASE_URL: str = "http://127.0.0.1:8001"
+    # 服务间 HTTP 超时秒数(全部为后台通知调用, 取较短值快速放弃)
+    SERVICE_HTTP_TIMEOUT: float = 10.0
+    # 服务间 HTTP 连接池上限
+    SERVICE_HTTP_MAX_CONNECTIONS: int = 50
 
     # ---------- Redis(文章列表多级缓存 L2) ----------
     # 主机; 为空则关闭 Redis, 列表仅用进程内 L1
@@ -64,10 +62,6 @@ class Settings(BaseSettings):
     ARTICLE_LIST_CACHE_TTL: int = 60
     # L1 本地缓存最大条目数
     ARTICLE_LIST_L1_MAXSIZE: int = 256
-    # 推荐文章缓存 TTL(秒); 个性化行为变动更频繁, 取更短 TTL
-    REC_ARTICLE_CACHE_TTL: int = 30
-    # 推荐文章 L1 本地缓存最大条目数(匿名 + 用户分 key)
-    REC_ARTICLE_L1_MAXSIZE: int = 512
 
     # ---------- RocketMQ(浏览统计异步写) ----------
     # Proxy gRPC 地址; 为空则关闭 MQ, API 同步写库(本地无 MQ 也能跑)
@@ -77,16 +71,6 @@ class Settings(BaseSettings):
     ROCKETMQ_TOPIC_BROWSE: str = "blog_browse"
     # 浏览统计消费组
     ROCKETMQ_GROUP_BROWSE: str = "blog_browse_consumer"
-
-    # ---------- RAG 检索参数 ----------
-    # 单个文本块的目标字符数
-    RAG_CHUNK_SIZE: int = 500
-    # 相邻块的重叠字符数, 避免语义在边界被切断
-    RAG_CHUNK_OVERLAP: int = 80
-    # 检索返回的片段数量
-    RAG_TOP_K: int = 6
-    # 相似度下限, 过滤无关片段减少提示词噪音
-    RAG_SCORE_THRESHOLD: float = 0.3
 
     # 计算属性: 将逗号分隔的来源字符串转为列表, 供 CORS 中间件使用
     @property

@@ -48,10 +48,26 @@ export default defineConfig({
   server: {
     // 移动端开发端口(与后端 CORS 白名单一致)
     port: 5173,
-    // 配置接口代理, 将 /api 转发到后端, 规避跨域
+    // 接口代理: 按路径前缀分发到对应微服务, 前端仍统一请求同源 /api
+    // 注意顺序: Vite 按声明顺序匹配, 更具体的前缀必须写在 '/api' 之前
     proxy: {
+      // AI 问答(SSE 流式) → backend-agent
+      '/api/ai': {
+        // Agent 服务地址
+        target: 'http://127.0.0.1:8001',
+        // 修改请求头中的 origin
+        changeOrigin: true
+      },
+      // 个性化推荐 → backend-agent
+      '/api/rec': {
+        // Agent 服务地址
+        target: 'http://127.0.0.1:8001',
+        // 修改请求头中的 origin
+        changeOrigin: true
+      },
+      // 其余业务接口 → backend-blog
       '/api': {
-        // 后端地址
+        // 业务服务地址
         target: 'http://127.0.0.1:8000',
         // 修改请求头中的 origin
         changeOrigin: true

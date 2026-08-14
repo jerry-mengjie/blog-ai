@@ -24,10 +24,19 @@ export default defineConfig({
   server: {
     // 管理后台端口(与后端 CORS 白名单一致)
     port: 5174,
-    // 接口代理到后端
+    // 接口代理: 按路径前缀分发到对应微服务
+    // 注意顺序: Vite 按声明顺序匹配, 更具体的前缀必须写在 '/api' 之前
     proxy: {
+      // AI 相关(如全量重建索引) → backend-agent
+      '/api/ai': {
+        // Agent 服务地址
+        target: 'http://127.0.0.1:8001',
+        // 修改 origin
+        changeOrigin: true
+      },
+      // 其余管理端接口 → backend-blog
       '/api': {
-        // 后端地址
+        // 业务服务地址
         target: 'http://127.0.0.1:8000',
         // 修改 origin
         changeOrigin: true

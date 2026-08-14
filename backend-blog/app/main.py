@@ -1,4 +1,10 @@
-"""FastAPI 应用入口: 注册中间件、异常处理与全部路由。"""
+"""FastAPI 应用入口: 注册中间件、异常处理与全部路由。
+
+本服务在微服务拆分后专注业务(用户/文章/评论/收藏/浏览统计), 对外仍是前端的
+主入口; AI 问答与推荐分别由 backend-agent、backend-rag 承担, 本服务只做两件事:
+1. 写路径上把文章变更推送给 backend-rag 并通知 backend-agent 失效推荐缓存
+2. 通过 /internal/* 向两个服务提供 MySQL 侧的取数能力
+"""
 
 # 导入异步上下文管理器工具
 from contextlib import asynccontextmanager
@@ -19,11 +25,21 @@ from app.core.redis import close_redis, get_redis, redis_enabled
 # 确保所有模型被导入以注册到 Base.metadata
 from app import models  # noqa: F401
 # 导入各业务路由
-from app.api import admin_browse, admin_user, ai, article, browse, category, comment, favorite, rec, tag, user
-# 导入 AI 开关判断
-from app.ai.llm import ai_enabled
-# 导入 Milvus 集合初始化与连接释放
-from app.ai.vector_store import close_vector_store, ensure_collection
+from app.api import (
+    admin_browse,
+    admin_user,
+    article,
+    browse,
+    category,
+    comment,
+    favorite,
+    internal_content,
+    internal_rec,
+    tag,
+    user,
+)
+# 导入下游服务客户端连接池释放
+from app.clients.base import close_clients
 # 导入 RocketMQ Producer 关闭(进程退出时释放)
 from app.mq.producer import shutdown_producer
 
@@ -48,18 +64,14 @@ async def lifespan(app: FastAPI):
             except Exception:
                 # 启动期 Redis 不可用时静默, 读路径会 miss 回源
                 pass
-    # 启用 AI 时初始化 Milvus 集合(HNSW 向量索引 + 标量倒排索引)
-    if ai_enabled():
-        # 幂等操作, 已存在且维度一致时直接复用并确保已 load
-        await ensure_collection()
     # yield 之前为启动逻辑, 之后为关闭逻辑
     yield
     # 关闭阶段: 释放 RocketMQ Producer(未启用时为空操作)
     shutdown_producer()
+    # 关闭阶段: 释放下游服务 HTTP 连接池
+    await close_clients()
     # 关闭阶段: 释放 Redis 连接池
     await close_redis()
-    # 关闭阶段: 释放 Milvus 客户端连接
-    await close_vector_store()
     # 关闭阶段: 释放数据库连接池
     await engine.dispose()
 
@@ -119,5 +131,5 @@ app.include_router(comment.router)    # 评论模块
 app.include_router(favorite.router)   # 收藏模块
 app.include_router(browse.router)     # 浏览足迹(用户×文章累计)
 app.include_router(admin_browse.router)  # 管理端-浏览统计
-app.include_router(ai.router)         # AI 问答模块(RAG)
-app.include_router(rec.router)        # 推荐模块(LangGraph 多节点)
+app.include_router(internal_content.router)  # 内部-内容(供 agent/rag 取数)
+app.include_router(internal_rec.router)      # 内部-推荐取数(供 agent 推荐图)

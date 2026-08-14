@@ -5,7 +5,7 @@ name = "backend-blog"
 # 项目版本
 version = "0.1.0"
 # 项目描述
-description = "博客系统后端 FastAPI + SQLAlchemy(async) + MySQL 9.7"
+description = "博客业务服务 FastAPI + SQLAlchemy(async) + MySQL 9.7 + Redis"
 # 要求的最低 Python 版本
 requires-python = ">=3.11"
 # 运行时依赖列表
@@ -19,13 +19,7 @@ dependencies = [
     "python-jose[cryptography]>=3.3.0",  # JWT 编解码
     "bcrypt>=4.1.0",              # 密码哈希(直接使用, 避免 passlib 兼容问题)
     "python-multipart>=0.0.9",    # 解析表单/文件上传
-    # Milvus 官方客户端(集合 DDL 用); 2.6.10+ 重构了连接管理, 与 langchain-milvus 0.3.3 不兼容, 故锁定
-    "pymilvus>=2.6.0,<2.6.10",
-    "langchain-openai>=1.3.5",    # LangChain OpenAI 集成: ChatOpenAI + OpenAIEmbeddings(兼容百炼)
-    "langchain-milvus>=0.3.3",    # LangChain Milvus 向量存储集成
-    "langchain-text-splitters>=1.1.2",  # LangChain 文本分块(RecursiveCharacterTextSplitter)
-    "rich>=15.0.0",
-    "langgraph>=1.2.9",
+    "httpx>=0.27.0",              # 服务间调用(推送索引 / 通知失效缓存)
     # RocketMQ 5.x 官方 Python 客户端(Producer + SimpleConsumer, 走 Proxy gRPC)
     "rocketmq-python-client>=5.0.0",
     # Redis 异步客户端 + hiredis 加速协议解析(列表多级缓存 L2)

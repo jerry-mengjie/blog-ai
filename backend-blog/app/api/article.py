@@ -17,8 +17,9 @@ from app.core.database import AsyncSessionLocal, get_db
 from app.core.response import Result, ok
 # 导入当前用户依赖
 from app.api.deps import get_current_user
-# 导入向量索引同步任务(AI 问答的 RAG 数据源)
-from app.ai.indexer import index_article, remove_article_index
+# 导入下游服务客户端(检索索引同步 / 推荐缓存失效)
+from app.clients import agent as agent_client
+from app.clients import rag as rag_client
 # 导入模型
 from app.models.article import Article
 from app.models.tag import ArticleTag, Tag
@@ -37,8 +38,6 @@ from app.schemas.article import (
 from app.services import browse as browse_svc
 # 导入文章列表服务(多级缓存 + MySQL)
 from app.services import article as article_svc
-# 导入推荐缓存服务(文章变更后需清推荐结果)
-from app.services import recommend as recommend_svc
 
 # 创建文章路由, 前缀 /api/article
 router = APIRouter(prefix="/api/article", tags=["文章模块"])
@@ -203,10 +202,17 @@ async def add_article(
     await db.refresh(article)
     # 失效 list + top 多级缓存
     await article_svc.invalidate_article_caches()
-    # 失效推荐多级缓存(新增文章会影响匿名/个性化推荐)
-    await recommend_svc.invalidate_recommend_cache()
-    # 响应返回后异步构建向量索引, 不阻塞发布接口
-    background.add_task(index_article, article.id)
+    # 响应返回后通知 backend-agent 失效推荐缓存(新增文章影响匿名/个性化推荐)
+    background.add_task(agent_client.invalidate_recommend_cache)
+    # 响应返回后把文档推给 backend-rag 建索引, 不阻塞发布接口
+    background.add_task(
+        rag_client.sync_article_index,
+        article.id,
+        article.category_id or 0,
+        article.title or "",
+        article.content or "",
+        article.status,
+    )
     # 返回新文章 ID
     return ok({"id": article.id})
 
@@ -260,10 +266,17 @@ async def update_article(
     await db.commit()
     # 列表/置顶字段变化后统一失效 Feed 缓存
     await article_svc.invalidate_article_caches()
-    # 失效推荐缓存(标题/摘要/状态/分类/置顶变化都可能影响推荐结果)
-    await recommend_svc.invalidate_recommend_cache()
-    # 响应返回后异步重建向量索引(内容/分类/状态变化都会同步)
-    background.add_task(index_article, article_id)
+    # 通知失效推荐缓存(标题/摘要/状态/分类/置顶变化都可能影响推荐结果)
+    background.add_task(agent_client.invalidate_recommend_cache)
+    # 响应返回后重建索引(状态改为非发布时会转成删除索引)
+    background.add_task(
+        rag_client.sync_article_index,
+        article_id,
+        article.category_id or 0,
+        article.title or "",
+        article.content or "",
+        article.status,
+    )
     # 返回成功
     return ok(message="更新成功")
 
@@ -296,9 +309,9 @@ async def delete_article(
     await db.commit()
     # 删除后失效 list + top 缓存
     await article_svc.invalidate_article_caches()
-    # 删除后失效推荐缓存, 防止返回已删除文章
-    await recommend_svc.invalidate_recommend_cache()
-    # 响应返回后异步删除该文章的向量索引
-    background.add_task(remove_article_index, article_id)
+    # 通知失效推荐缓存, 防止推荐里返回已删除文章
+    background.add_task(agent_client.invalidate_recommend_cache)
+    # 响应返回后删除该文章的向量索引
+    background.add_task(rag_client.remove_article_index, article_id)
     # 返回成功
     return ok(message="删除成功")
