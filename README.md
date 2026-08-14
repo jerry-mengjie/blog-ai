@@ -109,44 +109,53 @@ ROCKETMQ_GROUP_BROWSE=blog_browse_consumer
 
 留空 `ROCKETMQ_ENDPOINTS` 则关闭 MQ，接口同步写库（无 Worker 也能跑通）。
 
-### 3.4 三个后端服务
+### 3.4 一键启动（五个进程）
 
-按 blog → rag → agent 的顺序启动（另两个服务都要回调 blog 取数）：
+首次需要先装依赖（之后可跳过）：
 
 ```bash
-# 业务服务 8000
-cd backend-blog && uv sync && uv run uvicorn app.main:app --reload --port 8000
-# 另开终端启动浏览统计 Worker（启用 MQ 时需要）
-cd backend-blog && uv run python -m app.mq.worker
-
-# 检索服务 8002（启动时自动确保 Milvus 集合与索引就绪）
-cd backend-rag && uv sync && uv run uvicorn app.main:app --reload --port 8002
-
-# 编排服务 8001
-cd backend-agent && uv sync && uv run uvicorn app.main:app --reload --port 8001
+cd backend-blog  && uv sync
+cd ../backend-agent && uv sync
+cd ../backend-rag   && uv sync
+cd ../frontend-app  && npm install
+cd ../frontend-admin && npm install
 ```
 
-交互式文档：<http://127.0.0.1:8000/docs>、<http://127.0.0.1:8001/docs>、<http://127.0.0.1:8002/docs>
+仓库根目录一条命令同时拉起三个后端 + 两个前端。`AI_API_KEY` 通过参数注入 `backend-agent` / `backend-rag`（覆盖 `.env`，不写回文件）：
+
+```bash
+./dev.sh sk-ws-H.EHDLRLY.uiYP.MEUCIH8XpkaqY-RYZqy_CIZ3xn1d3Pu7kGl5YdBK2tFz_T7EAiEA0AR-C5Vv-eCF-0_KNk
+```
+
+等价写法：`AI_API_KEY=sk-xxx ./dev.sh`。Ctrl+C 会停掉全部五个进程。
+
+| 进程 | 地址 |
+| --- | --- |
+| 移动端 frontend-app | http://localhost:5173 |
+| 管理后台 frontend-admin | http://localhost:5174 |
+| 业务 API backend-blog | http://127.0.0.1:8000/docs |
+| 编排 API backend-agent | http://127.0.0.1:8001/docs |
+| 检索 API backend-rag | http://127.0.0.1:8002/docs |
+
+启用 RocketMQ 时另开终端启动浏览统计 Worker：
+
+```bash
+cd backend-blog && uv run python -m app.mq.worker
+```
 
 三份 `.env` 中 `INTERNAL_TOKEN` 必须完全一致；`backend-agent` 的 `SECRET_KEY` / `ALGORITHM` 必须与 `backend-blog` 一致，否则无法识别登录用户（推荐会全部走匿名兜底）。
 
-### 3.5 移动端 frontend-app
-
-```bash
-cd frontend-app
-npm install
-npm run dev             # 默认 http://localhost:5173
-```
-
-### 3.6 管理后台 frontend-admin
-
-```bash
-cd frontend-admin
-npm install
-npm run dev             # 默认 http://localhost:5174
-```
-
 > 两个前端均通过 Vite 代理转发接口，无需配置跨域：`/api/ai`、`/api/rec` → `127.0.0.1:8001`（backend-agent），其余 `/api` → `127.0.0.1:8000`（backend-blog）。更具体的前缀必须写在 `/api` 之前，Vite 按声明顺序匹配。`backend-blog` 与 `backend-agent` 的 `CORS_ORIGINS` 均已放行 5173/5174。
+
+需要单独启动某个服务时：
+
+```bash
+cd backend-blog  && uv run uvicorn app.main:app --reload --port 8000
+cd backend-rag   && uv run uvicorn app.main:app --reload --port 8002
+cd backend-agent && uv run uvicorn app.main:app --reload --port 8001
+cd frontend-app  && npm run dev
+cd frontend-admin && npm run dev
+```
 
 ---
 
@@ -300,6 +309,7 @@ npm run dev             # 默认 http://localhost:5174
 ```
 blog_ai/
 ├── README.md                 # 本文档
+├── dev.sh                    # 一键启动五个进程(API Key 通过参数注入)
 ├── docs/ARCHITECTURE.md      # 微服务架构文档(拆分依据/服务边界/内部接口契约/降级矩阵)
 ├── docs/AI.md                # AI 问答功能文档(问答图 + LlamaIndex 检索/接口/性能优化)
 ├── docs/RECOMMEND.md         # 文章推荐系统文档(LangGraph 多节点/召回策略/多级缓存)
