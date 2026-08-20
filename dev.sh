@@ -2,20 +2,48 @@
 # 一键启动五个进程: backend-blog / backend-agent / backend-rag / frontend-app / frontend-admin
 #
 # 用法:
-#   ./dev.sh <AI_API_KEY>
-#   AI_API_KEY=sk-xxx ./dev.sh
+#   ./dev.sh [--debug] <AI_API_KEY>
+#   AI_API_KEY=sk-xxx ./dev.sh [--debug]
 #
-# Key 会以环境变量覆盖 backend-agent / backend-rag 的 .env, 不写回文件。
-# Ctrl+C 会把五个子进程一起停掉。
+# Key 默认以环境变量覆盖 .env, 不写回文件。
+# --debug: 只起前端, 并把 key 写入 agent/rag 的 .env, 供 Cursor F5 读取。
+# Ctrl+C 会把本脚本拉起的子进程一起停掉。
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-KEY="${1:-${AI_API_KEY:-}}"
+DEBUG=0
+KEY=""
+
+usage() {
+  echo "用法: $0 [--debug] <AI_API_KEY>" >&2
+  echo "  或: AI_API_KEY=sk-xxx $0 [--debug]" >&2
+}
+
+for arg in "$@"; do
+  case "${arg}" in
+    --debug|-d) DEBUG=1 ;;
+    -h|--help) usage; exit 0 ;;
+    -*)
+      echo "未知参数: ${arg}" >&2
+      usage
+      exit 1
+      ;;
+    *)
+      if [[ -n "${KEY}" ]]; then
+        echo "多余参数: ${arg}" >&2
+        usage
+        exit 1
+      fi
+      KEY="${arg}"
+      ;;
+  esac
+done
+
+KEY="${KEY:-${AI_API_KEY:-}}"
 
 if [[ -z "${KEY}" ]]; then
-  echo "用法: $0 <AI_API_KEY>" >&2
-  echo "  或: AI_API_KEY=sk-xxx $0" >&2
+  usage
   exit 1
 fi
 
@@ -54,6 +82,12 @@ start() {
 }
 
 export AI_API_KEY="${KEY}"
+# F5 从 .env 读配置, debug 时必须写进文件
+if [[ "${DEBUG}" -eq 1 ]]; then
+  for envf in "${ROOT}/backend-agent/.env" "${ROOT}/backend-rag/.env"; do
+    sed -i '' "s|^AI_API_KEY=.*|AI_API_KEY=${KEY}|" "${envf}"
+  done
+fi
 
 echo "启动中 (AI_API_KEY 已注入 agent / rag) ..."
 echo "  移动端     http://localhost:5173"
@@ -61,13 +95,18 @@ echo "  管理后台   http://localhost:5174"
 echo "  业务 API   http://127.0.0.1:8000/docs"
 echo "  编排 API   http://127.0.0.1:8001/docs"
 echo "  检索 API   http://127.0.0.1:8002/docs"
+if [[ "${DEBUG}" -eq 1 ]]; then
+  echo "调试模式: 只起前端, 后端请 F5「backends (blog + agent + rag)」"
+fi
 echo "Ctrl+C 停止全部进程"
 echo
 
 # 颜色: 32 绿 / 36 青 / 35 紫 / 33 黄 / 34 蓝
-start blog   32 backend-blog  uv run uvicorn app.main:app --reload --port 8000
-start agent  36 backend-agent uv run uvicorn app.main:app --reload --port 8001
-start rag    35 backend-rag   uv run uvicorn app.main:app --reload --port 8002
+if [[ "${DEBUG}" -eq 0 ]]; then
+  start blog   32 backend-blog  uv run uvicorn app.main:app --reload --port 8000
+  start agent  36 backend-agent uv run uvicorn app.main:app --reload --port 8001
+  start rag    35 backend-rag   uv run uvicorn app.main:app --reload --port 8002
+fi
 start app    33 frontend-app  npm run dev
 start admin  34 frontend-admin npm run dev
 

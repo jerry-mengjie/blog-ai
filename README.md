@@ -124,10 +124,18 @@ cd ../frontend-admin && npm install
 仓库根目录一条命令同时拉起三个后端 + 两个前端。`AI_API_KEY` 通过参数注入 `backend-agent` / `backend-rag`（覆盖 `.env`，不写回文件）：
 
 ```bash
-./dev.sh sk-ws-H.EHDLRLY.uiYP.MEUCIH8XpkaqY-RYZqy_CIZ3xn1d3Pu7kGl5YdBK2tFz_T7EAiEA0AR-C5Vv-eCF-0_KNk
+./dev.sh sk-xxx
+# 等价: AI_API_KEY=sk-xxx ./dev.sh
 ```
 
-等价写法：`AI_API_KEY=sk-xxx ./dev.sh`。Ctrl+C 会停掉全部五个进程。
+加 `--debug` 时**只起两个前端**，三个后端留给 Cursor F5（避免端口冲突）：
+
+```bash
+./dev.sh --debug sk-xxx
+# 然后 Run and Debug 选「backends (blog + agent + rag)」按 F5
+```
+
+默认不调试。Ctrl+C 会停掉 `dev.sh` 拉起的进程。
 
 | 进程 | 地址 |
 | --- | --- |
@@ -135,7 +143,7 @@ cd ../frontend-admin && npm install
 | 管理后台 frontend-admin | http://localhost:5174 |
 | 业务 API backend-blog | http://127.0.0.1:8000/docs |
 | 编排 API backend-agent | http://127.0.0.1:8001/docs |
-| 检索 API backend-rag | http://127.0.0.1:8002/docs |
+| 检索 API backend-rag | http://127.0.0.1:8002/docs | |
 
 启用 RocketMQ 时另开终端启动浏览统计 Worker：
 
@@ -309,7 +317,8 @@ cd frontend-admin && npm run dev
 ```
 blog_ai/
 ├── README.md                 # 本文档
-├── dev.sh                    # 一键启动五个进程(API Key 通过参数注入)
+├── dev.sh                    # 一键启动五个进程(API Key 注入; --debug 只起前端)
+├── .vscode/launch.json       # F5 调试三个后端
 ├── docs/ARCHITECTURE.md      # 微服务架构文档(拆分依据/服务边界/内部接口契约/降级矩阵)
 ├── docs/AI.md                # AI 问答功能文档(问答图 + LlamaIndex 检索/接口/性能优化)
 ├── docs/RECOMMEND.md         # 文章推荐系统文档(LangGraph 多节点/召回策略/多级缓存)

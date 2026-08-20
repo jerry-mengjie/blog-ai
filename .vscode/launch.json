@@ -1,0 +1,48 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "backend-blog",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "asyncio"],
+      "cwd": "${workspaceFolder}/backend-blog",
+      "python": "${workspaceFolder}/backend-blog/.venv/bin/python",
+      "envFile": "${workspaceFolder}/backend-blog/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "backend-agent",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--host", "0.0.0.0", "--port", "8001", "--loop", "asyncio"],
+      "cwd": "${workspaceFolder}/backend-agent",
+      "python": "${workspaceFolder}/backend-agent/.venv/bin/python",
+      "envFile": "${workspaceFolder}/backend-agent/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "backend-rag",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["app.main:app", "--host", "0.0.0.0", "--port", "8002", "--loop", "asyncio"],
+      "cwd": "${workspaceFolder}/backend-rag",
+      "python": "${workspaceFolder}/backend-rag/.venv/bin/python",
+      "envFile": "${workspaceFolder}/backend-rag/.env",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "backends (blog + agent + rag)",
+      "configurations": ["backend-blog", "backend-agent", "backend-rag"],
+      "stopAll": true
+    }
+  ]
+}
