@@ -13,6 +13,8 @@ dependencies = [
     "fastapi>=0.115.0",            # Web 框架
     "uvicorn[standard]>=0.30.0",  # ASGI 服务器(含 uvloop/httptools 提升性能)
     "sqlalchemy>=2.0.30",         # ORM, 2.0 风格 + 异步支持
+    # SQLAlchemy 异步依赖 greenlet; 其自身标记不含 macOS arm64, 需显式声明
+    "greenlet>=3.0.0",
     "aiomysql>=0.2.0",            # MySQL 9.7 异步驱动 (caching_sha2_password)
     "pydantic>=2.7.0",            # 数据校验与序列化
     "pydantic-settings>=2.3.0",   # 读取 .env 配置
