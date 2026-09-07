@@ -95,11 +95,10 @@ article:list:v1:p1:ps{page_size}:cat:{all|category_id}
 
 ```bash
 docker run -d \
-  --name redis-local \
+  --name redis \
   -p 6379:6379 \
   -v redis_data:/data \
-  redis:latest \
-  redis-server --requirepass 123456 --appendonly yes
+  redis:8-alpine redis-server --requirepass qwqwqw78
 ```
 
 `.env`：
@@ -107,7 +106,7 @@ docker run -d \
 ```env
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
-REDIS_PASSWORD=123456
+REDIS_PASSWORD=qwqwqw78
 REDIS_DB=0
 REDIS_MAX_CONNECTIONS=50
 REDIS_SOCKET_TIMEOUT=2.0
@@ -174,8 +173,8 @@ mysql -u root -p blog_ai < backend-blog/sql/migrate_article_list_index.sql
 
 ## 10. 自测清单
 
-1. 启动 Redis（密码 `123456`）与后端。
+1. 启动 Redis（密码 `qwqwqw78`）与后端。
 2. 连续两次请求同一分类第 1 页：第二次应明显更快（L1/L2）。
-3. `redis-cli -a 123456 KEYS 'article:list:v1:*'` 可见对应 key。
+3. `redis-cli -a qwqwqw78 KEYS 'article:list:v1:*'` 可见对应 key。
 4. 管理端发文/改文/删文后，列表应立即反映（缓存已失效）。
 5. 停止 Redis：接口仍可用（L1 或直查），不 500。

@@ -14,7 +14,7 @@
 | 业务服务 | `backend-blog` | 8000 | FastAPI 经典分层 + SQLAlchemy 2.0(async) + aiomysql + MySQL 9.7 + JWT | 用户/文章/评论/收藏/浏览统计；MySQL 的唯一持有者 |
 | 编排服务 | `backend-agent` | 8001 | FastAPI + **LangGraph** + **LangChain**(LCEL) + SSE | AI 问答图与推荐图，详见 [docs/AI.md](docs/AI.md)、[docs/RECOMMEND.md](docs/RECOMMEND.md) |
 | 检索服务 | `backend-rag` | 8002 | FastAPI + **LlamaIndex** + Milvus 2.6 | 分块/向量化/索引/向量检索/画像召回；Milvus 的唯一持有者 |
-| 缓存 | Redis 7 | 6379 | 三服务共用实例（列表缓存 / 推荐缓存 + 限流 / 检索缓存） | L1 内存 + L2 Redis 多级缓存 |
+| 缓存 | Redis 8 | 6379 | 三服务共用实例（列表缓存 / 推荐缓存 + 限流 / 检索缓存） | L1 内存 + L2 Redis 多级缓存 |
 | 消息队列 | `deploy/rocketmq` | 8022 | Apache RocketMQ 5.x（NameServer + Broker + Proxy + Dashboard） | 浏览上报 / 文章 PV 解耦，详见 [docs/USER_BROWSE.md](docs/USER_BROWSE.md) |
 | 向量库 | `deploy/milvus` | 19530 | Milvus 2.6 standalone（etcd + MinIO + Milvus） | HNSW + 标量倒排索引 |
 | 移动端 | `frontend-app` | 5173 | Vue3 + Vite + Vant 4 + Pinia + Vue Router + Axios | 面向 C 端用户 |
@@ -80,7 +80,11 @@ Milvus 使用官方 Docker Compose standalone 编排（仓库已保留一份 `de
 ```bash
 cd deploy/milvus && docker compose up -d          # gRPC 19530, 健康检查 9091
 
-docker run -d -p 6379:6379 redis:latest --requirepass 123456   # 三服务共用
+docker run -d \
+  --name redis \
+  -p 6379:6379 \
+  -v redis_data:/data \
+  redis:8-alpine redis-server --requirepass qwqwqw78   # 三服务共用
 ```
 
 > AI 问答需在 `backend-agent/.env`（对话模型）与 `backend-rag/.env`（向量模型）中填入 `AI_API_KEY`（阿里云百炼）。留空则 AI 功能自动关闭，其余功能不受影响。存量文章需管理员调用 `POST /api/ai/reindex` 建一次索引。详见 [docs/AI.md](docs/AI.md)。

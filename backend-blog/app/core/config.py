@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     # 端口(docker -p 6379:6379)
     REDIS_PORT: int = 6379
     # 密码(与 redis-server --requirepass 一致)
-    REDIS_PASSWORD: str = "123456"
+    REDIS_PASSWORD: str = "qwqwqw78"
     # 逻辑库编号
     REDIS_DB: int = 0
     # 连接池上限, 避免瞬时打满 Redis

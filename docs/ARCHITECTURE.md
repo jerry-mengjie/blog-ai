@@ -137,7 +137,7 @@ SQL 全部收敛在 `app/services/recall.py`：**只取数，不含推荐策略*
 # 0) 基础设施
 docker compose -f deploy/milvus/docker-compose.yml up -d      # Milvus 19530
 docker compose -f deploy/rocketmq/docker-compose.yml up -d    # RocketMQ Proxy 8022
-docker run -d -p 6379:6379 redis:latest --requirepass 123456  # Redis 6379
+docker run -d --name redis -p 6379:6379 -v redis_data:/data redis:8-alpine redis-server --requirepass qwqwqw78  # Redis 6379
 
 # 1) 业务服务(其余两个服务都要回调它取数)
 cd backend-blog && uv sync && uv run uvicorn app.main:app --reload --port 8000
